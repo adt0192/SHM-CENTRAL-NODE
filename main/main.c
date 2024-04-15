@@ -474,9 +474,9 @@ static void uart_task(void *pvParameters) {
             // we mark the end of the block
             start_uart_block = false;
 
-            ESP_LOGI(TAG, "***DEBUGGING*** full_in_uart_data: %s",
+            ESP_LOGW(TAG, "***DEBUGGING*** full_in_uart_data: %s",
                      full_in_uart_data);
-            ESP_LOGI(TAG, "***DEBUGGING*** data_received_count: %u",
+            ESP_LOGW(TAG, "***DEBUGGING*** data_received_count: %u",
                      data_received_count);
 
             // +RCV=22,length,data,RSSI,SNR
@@ -496,6 +496,8 @@ static void uart_task(void *pvParameters) {
                 break;
               case 3:
                 Lora_data.Data = token;
+                ESP_LOGW(TAG, "***DEBUGGING*** Lora_data.Data: %s",
+                         Lora_data.Data);
                 break;
               case 4:
                 Lora_data.SignalStrength = token;
