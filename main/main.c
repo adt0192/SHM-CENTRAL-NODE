@@ -86,7 +86,7 @@ char *is_rylr998_module_init = "N";
 // sensonr node, because it will be split into 120 bytes sub-block
 // the full block received from the sensor node it's max 256 bytes
 bool start_uart_block = false;
-bool end_uart_block = false;
+bool end_uart_block = false; // not used
 //***************************************************************************//
 //********************************** FLAGS **********************************//
 //***************************************************************************//
@@ -390,7 +390,7 @@ static void uart_task(void *pvParameters) {
   uint8_t *full_in_uart_data = (uint8_t *)malloc(FULL_IN_UART_DATA_SIZE);
 
   // to keep track of the UART sub-block of data received, 120 bytes max each
-  uint8_t sub_block_count = 0;
+  uint8_t data_received_count = 0;
 
   while (1) {
     // waiting for UART event
@@ -426,12 +426,9 @@ static void uart_task(void *pvParameters) {
         ESP_LOGI(TAG, "Data received from LoRa module: %s", incoming_uart_data);
         ESP_LOGI(TAG, "Length of data received: %zu", event.size);
 
-        ///// if the module answers +OK and we are sending data /////
-        // so we wait the ack message
+        ///// if the module answers +OK and we are sending data ****************
         if ((strncmp((const char *)incoming_uart_data, "+OK", 3) == 0) &&
             (strncmp((const char *)is_sending_ack, "Y", 1) == 0)) {
-          // we successfully sent the message
-          is_data_sent_ok = "+OK"; // not used
           // so we already sent ack, we put the flag back to "N"
           is_sending_ack = "N";
 
@@ -447,64 +444,82 @@ static void uart_task(void *pvParameters) {
 
           break;
         }
-        ///// if the module answers +OK and we are sending data /////
+        ///// if the module answers +OK and we are sending data ****************
 
-        ///// if the module is receiving data, we proccess it but only if the
-        /// module is fully configured/////
-        // +RCV=22,length,data,RSSI,SNR
-        // extract the components of the received message
-        if ((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0) &&
+        ///// if the module is receiving data, we proccess it ******************
+        // but only if the module is fully configured
+        if (((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0) ||
+             (start_uart_block)) &&
             (strncmp((const char *)is_rylr998_module_init, "Y", 1) == 0)) {
+          // we mark the start of the block
+          start_uart_block = true;
+
+          // verify if there is enough space in full_in_uart_data
+          if (data_received_count + event.size <= FULL_IN_UART_DATA_SIZE) {
+            // copy received data to full_in_uart_data
+            memcpy(full_in_uart_data + data_received_count, incoming_uart_data,
+                   event.size);
+            // update the amount of data received
+            data_received_count += event.size;
+          } else {
+            ESP_LOGE(TAG, "There's no enough space in 'full_in_uart_data' to "
+                          "store received data");
+          }
+
           // if 'event.size == 120' it means we don't have a full block of info,
           // so we need to wait until we have the full block
           if (event.size == 120) {
-            // verify if there is enough space in full_in_uart_data
-            if (sub_block_count + event.size <= FULL_IN_UART_DATA_SIZE) {
-              // copy received data to full_in_uart_data
-              memcpy(full_in_uart_data + sub_block_count, incoming_uart_data,
-                     event.size);
-              // update the amount of data received
-              sub_block_count += event.size;
-            } else {
-              ESP_LOGE(TAG, "There's no enough space in 'full_in_uart_data' to "
-                            "store received data");
-            }
-          }
+            break;
+          } else { // (event.size == 120)
+            // we mark the end of the block
+            start_uart_block = false;
 
-          char *token = strtok((char *)incoming_uart_data, "=");
-          // loop through the string to extract all other tokens
-          uint8_t count_token = 0;
-          while (token != NULL) {
-            token = strtok(NULL, ",");
-            count_token++;
-            switch (count_token) {
-            case 1:
-              Lora_data.Address = token;
-              break;
-            case 2:
-              Lora_data.DataLength = token;
-              break;
-            case 3:
-              Lora_data.Data = token;
-              break;
-            case 4:
-              Lora_data.SignalStrength = token;
-              break;
-            case 5:
-              Lora_data.SignalNoise = token;
+            ESP_LOGI(TAG, "***DEBUGGING*** full_in_uart_data: %s",
+                     full_in_uart_data);
+            ESP_LOGI(TAG, "***DEBUGGING*** data_received_count: %u",
+                     data_received_count);
 
-              // Send a notification to
-              // check_header_incoming_data_task_handle(), bringing it out of
-              // the Blocked state
-              vTaskDelay(pdMS_TO_TICKS(DELAY / 10));
-              xTaskNotifyGive(check_header_incoming_data_task_handle);
-              break;
-            default:
-              break;
-            }
-          }
-        }
-        ///// if the module is receiving data, we proccess it /////
+            // +RCV=22,length,data,RSSI,SNR
+            // extract the components of the received message
+            char *token = strtok((char *)full_in_uart_data, "=");
+            // loop through the string to extract all other tokens
+            uint8_t count_token = 0;
+            while (token != NULL) {
+              token = strtok(NULL, ",");
+              count_token++;
+              switch (count_token) {
+              case 1:
+                Lora_data.Address = token;
+                break;
+              case 2:
+                Lora_data.DataLength = token;
+                break;
+              case 3:
+                Lora_data.Data = token;
+                break;
+              case 4:
+                Lora_data.SignalStrength = token;
+                break;
+              case 5:
+                Lora_data.SignalNoise = token;
+
+                // zero out
+                bzero(full_in_uart_data, FULL_IN_UART_DATA_SIZE);
+                data_received_count = 0;
+
+                // send a notification to check_header_incoming_data_task,
+                // bringing it out of the 'Blocked' state
+                vTaskDelay(pdMS_TO_TICKS(DELAY / 10));
+                xTaskNotifyGive(check_header_incoming_data_task_handle);
+                break;
+              default:
+                break;
+              }
+            } // (token != NULL)
+          }   // (event.size == 120)
+        } // if ((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0) &&
+          // (strncmp((const char *)is_rylr998_module_init, "Y", 1) == 0))
+        ///// if the module is receiving data, we proccess it ******************
         break;
 
       // Event of HW FIFO overflow detected
