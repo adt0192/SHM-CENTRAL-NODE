@@ -468,9 +468,8 @@ static void uart_task(void *pvParameters) {
 
           // if 'event.size == 120' it means we don't have a full block of info,
           // so we need to wait until we have the full block
-          if (event.size == 120) {
-            break;
-          } else { // (event.size == 120)
+          // so the programm won't enter this section
+          if (event.size != 120) {
             // we mark the end of the block
             start_uart_block = false;
 
@@ -505,10 +504,6 @@ static void uart_task(void *pvParameters) {
               case 5:
                 Lora_data.SignalNoise = token;
 
-                // zero out
-                bzero(full_in_uart_data, FULL_IN_UART_DATA_SIZE);
-                data_received_count = 0;
-
                 // send a notification to check_header_incoming_data_task,
                 // bringing it out of the 'Blocked' state
                 vTaskDelay(pdMS_TO_TICKS(DELAY / 10));
@@ -518,7 +513,10 @@ static void uart_task(void *pvParameters) {
                 break;
               }
             } // (token != NULL)
-          }   // (event.size == 120)
+            // zero out
+            bzero(full_in_uart_data, FULL_IN_UART_DATA_SIZE);
+            data_received_count = 0;
+          } // if (event.size != 120)
         } // if ((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0) &&
           // (strncmp((const char *)is_rylr998_module_init, "Y", 1) == 0))
         ///// if the module is receiving data, we proccess it ******************
