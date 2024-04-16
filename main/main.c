@@ -150,7 +150,7 @@ double max_z_value = 0; // max z initializing
 int d_a = 0;
 
 // needed bits for each axis to transmit their respective samples
-uint8_t x_bits_tx, y_bits_tx, z_bits_tx;
+uint8_t x_bits, y_bits, z_bits;
 
 Lora_Data_t Lora_data;
 
@@ -243,6 +243,9 @@ void init_led(void) {
 //*************** Extract info from the received ctrl message ***************//
 ///////////////////////////////////////////////////////////////////////////////
 static void extract_info_from_ctrl_msg_task(void *pvParameters) {
+  char *x_bits_hex = NULL;
+  char *y_bits_hex = NULL;
+  char *z_bits_hex = NULL;
   while (1) {
     // Block to wait for data received (+RCV=) and check if ACK
     // Block indefinitely (without a timeout, so no need to check the function's
@@ -261,6 +264,46 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
     ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK ****************");
     // Print out remaining task stack memory (words) ************************
 
+    //     x_bits_tx       y_bits_tx       z_bits_tx
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    // |0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|     <<PAYLOAD...>>
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    //
+    // |    32 bits    |    32 bits    |    32 bits    |
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    // |  min_x_value  |  min_y_value  |  min_z_value  |     <<...PAYLOAD>>
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    x_bits_hex = malloc((2 + 1) * sizeof(*x_bits_hex));
+    if (x_bits_hex == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *x_bits_hex in task "
+                    "extract_info_from_ctrl_msg_task");
+    }
+    GetSubString(in_ctrl_msg, 0, 2, x_bits_hex);
+    x_bits = HexadecimalToDecimal(x_bits_hex);
+    free(x_bits_hex);
+    //
+    y_bits_hex = malloc((2 + 1) * sizeof(*y_bits_hex));
+    if (y_bits_hex == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *y_bits_hex in task "
+                    "extract_info_from_ctrl_msg_task");
+    }
+    GetSubString(in_ctrl_msg, 2, 2, y_bits_hex);
+    y_bits = HexadecimalToDecimal(y_bits_hex);
+    free(y_bits_hex);
+    //
+    z_bits_hex = malloc((2 + 1) * sizeof(*z_bits_hex));
+    if (z_bits_hex == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *z_bits_hex in task "
+                    "extract_info_from_ctrl_msg_task");
+    }
+    GetSubString(in_ctrl_msg, 4, 2, z_bits_hex);
+    z_bits = HexadecimalToDecimal(z_bits_hex);
+    free(z_bits_hex);
+
+    // freeing up allocate dspace
     free(in_ctrl_msg);
   }
 }
