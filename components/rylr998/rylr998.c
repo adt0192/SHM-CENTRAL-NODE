@@ -42,7 +42,7 @@ static const char *TAG = "RYLR998 CENTRAL NODE";
 //********************** RYLR998 Module Initialization **********************//
 ///////////////////////////////////////////////////////////////////////////////
 void init_rylr998_module(void) {
-  ESP_LOGW(TAG, "!!!DEBUGGING!!! ENTERING 'init_rylr998_module'...");
+  ESP_LOGW(TAG, "***DEBUGGING*** ENTERING 'init_rylr998_module'...");
   // ESP_LOGI(TAG, "Sending Factory Command to LoRa Module...\n");
   // char *factory_command = "AT+FACTORY\r\n";
   //  int err_uart_factory_command =
@@ -148,7 +148,7 @@ void init_rylr998_module(void) {
 
   ESP_LOGI(TAG, "RYLR998 Module Initialized !!!COMPLETED!!!\n");
   is_rylr998_module_init = "Y";
-  ESP_LOGW(TAG, "!!!DEBUGGING!!! LEAVING 'init_rylr998_module'...");
+  ESP_LOGW(TAG, "***DEBUGGING*** LEAVING 'init_rylr998_module'...");
 }
 ///////////////////////////////////////////////////////////////////////////////
 //********************** RYLR998 Module Initialization **********************//
@@ -169,15 +169,16 @@ void lora_send(int address, const char *data) {
 
   int bytes_pushed_to_tx_fifo;
 
-  ESP_LOGW(TAG,
-           "!!!DEBUGGING!!! Before 'uart_write_bytes' in 'lora_send' function");
+  /* ESP_LOGW(TAG,
+           "***DEBUGGING*** Before 'uart_write_bytes' in 'lora_send' function");
+   */
   bytes_pushed_to_tx_fifo = uart_write_bytes(
       UART_NUM, (const char *)command_data, strlen(command_data));
-  ESP_LOGW(TAG, "!!!DEBUGGING!!! bytes_pushed_to_tx_fifo= <%d>",
+  ESP_LOGW(TAG, "***DEBUGGING*** bytes_pushed_to_tx_fifo= <%d>",
            bytes_pushed_to_tx_fifo);
-  ESP_LOGW(
+  /* ESP_LOGW(
       TAG,
-      "!!!DEBUGGING!!! After 'uart_write_bytes' in 'lora_send' function\n");
+      "***DEBUGGING*** After 'uart_write_bytes' in 'lora_send' function\n"); */
 
   // vTaskDelay(pdMS_TO_TICKS(DELAY * 2));
 }

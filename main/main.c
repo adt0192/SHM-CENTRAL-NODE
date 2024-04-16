@@ -294,7 +294,7 @@ static void check_header_incoming_data_task(void *pvParameters) {
 
     ESP_LOGW(TAG,
              "***DEBUGGING*** Inside 'check_header_incoming_data_task' -> "
-             "Lora_data.Data: %s",
+             "Lora_data.Data: <%s>",
              Lora_data.Data);
 
     ///// extract the header of the incoming data ******************************
@@ -355,11 +355,10 @@ static void check_header_incoming_data_task(void *pvParameters) {
 
       ///// VISUALIZE **********************************************************
       ESP_LOGE(TAG,
-               "*********************************************************");
-      ESP_LOGW(TAG, "in_transaction_ID_dec <%u>", in_transaction_ID_dec);
-      ESP_LOGW(TAG, "Free heap memmory (bytes): <%lu>", xPortGetFreeHeapSize());
+               "******************** FREE HEAP MEMORY ********************");
+      ESP_LOGW(TAG, "<%lu> BYTES", xPortGetFreeHeapSize());
       ESP_LOGE(TAG,
-               "*********************************************************");
+               "******************** FREE HEAP MEMORY ********************");
       ///// VISUALIZE **********************************************************
 
       gpio_set_level(LED_PIN, 1);
@@ -407,7 +406,7 @@ static void uart_task(void *pvParameters) {
     if ((xQueueReceive(uart_queue, (void *)&event, portMAX_DELAY)) &&
         (!start_uart_block)) {
 
-      ESP_LOGE(TAG,
+      /* ESP_LOGE(TAG,
                "******************** <MEMORY CHECKING> *********************");
       ESP_LOGI(TAG, "Heap integrety %i",
                heap_caps_check_integrity_all(true));              // Added
@@ -416,14 +415,15 @@ static void uart_task(void *pvParameters) {
                uxTaskGetStackHighWaterMark(NULL)); // Added
       ESP_LOGE(
           TAG,
-          "******************** <MEMORY CHECKING> *********************\n");
+          "******************** <MEMORY CHECKING> *********************\n"); */
 
-      ESP_LOGW(TAG, "!!!DEBUGGING!!! ENTERING 'xQueueReceive' in 'uart_task'");
+      // ESP_LOGW(TAG, "***DEBUGGING*** ENTERING 'xQueueReceive' in
+      // 'uart_task'");
 
       bzero(incoming_uart_data, INCOMING_UART_DATA_SIZE);
 
       // Print out remaining task stack memory (words)
-      ESP_LOGW(TAG, "uart_task high water mark (words): %d",
+      ESP_LOGW(TAG, "Bytes free in 'uart_task' stack: <%zu>",
                uxTaskGetStackHighWaterMark(NULL));
 
       switch (event.type) {
@@ -470,6 +470,11 @@ static void uart_task(void *pvParameters) {
                    event.size);
             // update the amount of data received
             data_received_count += event.size;
+            ESP_LOGW(
+                TAG,
+                "***DEBUGGING*** Inside 'if (data_received_count + event.size "
+                "<= FULL_IN_UART_DATA_SIZE)' -> data_received_count: %u",
+                data_received_count);
           } else {
             ESP_LOGE(TAG, "There's no enough space in 'full_in_uart_data' to "
                           "store received data");
@@ -502,7 +507,8 @@ static void uart_task(void *pvParameters) {
                 Lora_data.DataLength = token;
                 break;
               case 3:
-                Lora_data.Data = token;
+                Lora_data.Data =
+                    strdup(token); // strdup crea una copia de la cadena
                 Lora_data.Data[strlen(Lora_data.Data)] = '\0';
                 ESP_LOGW(TAG, "***DEBUGGING*** Lora_data.Data: <%s>",
                          Lora_data.Data);
@@ -522,6 +528,11 @@ static void uart_task(void *pvParameters) {
                          "Lora_data.Data: <%s>",
                          Lora_data.Data);
                 xTaskNotifyGive(check_header_incoming_data_task_handle);
+                ESP_LOGW(TAG,
+                         "***DEBUGGING*** Inside 'uart_task' after "
+                         "'xTaskNotifyGive' -> "
+                         "Lora_data.Data: <%s>",
+                         Lora_data.Data);
                 break;
               default:
                 break;
@@ -531,12 +542,6 @@ static void uart_task(void *pvParameters) {
             bzero(full_in_uart_data, FULL_IN_UART_DATA_SIZE);
             data_received_count = 0;
           } // if (event.size != 120)
-          ESP_LOGW(TAG,
-                   "***DEBUGGING*** Inside 'uart_task' after 'if (event.size "
-                   "!= 120)' -> "
-                   "Lora_data.Data: <%s>",
-                   Lora_data.Data);
-
           // we mark the end of the block
           start_uart_block = false;
         } // if ((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0) &&
@@ -632,10 +637,10 @@ void app_main(void) {
   vTaskDelay(pdMS_TO_TICKS(50));
   xTaskCreate(uart_task, "uart_task", TASK_MEMORY * 2, NULL, 12, NULL);
   ESP_LOGI(TAG, "Task 'uart_task' !!!CREATED!!!");
-  ESP_LOGW(TAG, "*********************************************************");
+  ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
   ESP_LOGW(TAG, "After 'uart_task' created");
-  ESP_LOGW(TAG, "Free heap memmory (bytes): <%lu>", xPortGetFreeHeapSize());
-  ESP_LOGW(TAG, "*********************************************************");
+  ESP_LOGW(TAG, "<%lu> BYTES", xPortGetFreeHeapSize());
+  ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
 
   //************************************************************************//
   ///// tasks creation /////
@@ -644,19 +649,19 @@ void app_main(void) {
                           NULL, 10, &check_header_incoming_data_task_handle,
                           tskNO_AFFINITY);
   ESP_LOGI(TAG, "Task 'check_header_incoming_data_task' !!!CREATED!!!");
-  ESP_LOGW(TAG, "*********************************************************");
+  ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
   ESP_LOGW(TAG, "After 'check_header_incoming_data_task' created");
-  ESP_LOGW(TAG, "Free heap memmory (bytes): <%lu>", xPortGetFreeHeapSize());
-  ESP_LOGW(TAG, "*********************************************************");
+  ESP_LOGW(TAG, "<%lu> BYTES", xPortGetFreeHeapSize());
+  ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
 
   xTaskCreatePinnedToCore(transmit_ack_task, "transmit_ack_task",
                           TASK_MEMORY * 2, NULL, 10, &transmit_ack_task_handle,
                           tskNO_AFFINITY);
   ESP_LOGI(TAG, "Task 'transmit_ack_task' !!!CREATED!!!");
-  ESP_LOGW(TAG, "*********************************************************");
+  ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
   ESP_LOGW(TAG, "After 'transmit_ack_task' created");
-  ESP_LOGW(TAG, "Free heap memmory (bytes): <%lu>", xPortGetFreeHeapSize());
-  ESP_LOGW(TAG, "*********************************************************");
+  ESP_LOGW(TAG, "<%lu> BYTES", xPortGetFreeHeapSize());
+  ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
   ///// tasks creation /////
   //************************************************************************//
 
