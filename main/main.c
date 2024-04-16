@@ -243,9 +243,21 @@ void init_led(void) {
 //*************** Extract info from the received ctrl message ***************//
 ///////////////////////////////////////////////////////////////////////////////
 static void extract_info_from_ctrl_msg_task(void *pvParameters) {
+  // to temporarily store the hexadecimal charactes for xyz amount of bits
   char *x_bits_hex = NULL;
   char *y_bits_hex = NULL;
   char *z_bits_hex = NULL;
+
+  // to temporarily store the hexadecimal charactes for xyz min values
+  char *min_x_value_hex = NULL;
+  char *min_y_value_hex = NULL;
+  char *min_z_value_hex = NULL;
+
+  // to store the 4 uint8_t values that each xyz min values will have
+  // to combine them to form a unique int32_t value
+  uint8_t *min_x_value_8bit_arr = NULL;
+  uint8_t *min_y_value_8bit_arr = NULL;
+  uint8_t *min_z_value_8bit_arr = NULL;
   while (1) {
     // Block to wait for data received (+RCV=) and check if ACK
     // Block indefinitely (without a timeout, so no need to check the function's
@@ -273,6 +285,7 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     // |  min_x_value  |  min_y_value  |  min_z_value  |     <<...PAYLOAD>>
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    // working with the xyz amount of bits values
     x_bits_hex = malloc((2 + 1) * sizeof(*x_bits_hex));
     if (x_bits_hex == NULL) {
       ESP_LOGE(TAG, "NOT ENOUGH HEAP");
@@ -302,6 +315,78 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
     GetSubString(in_ctrl_msg, 4, 2, z_bits_hex);
     z_bits = HexadecimalToDecimal(z_bits_hex);
     free(z_bits_hex);
+
+    // working with xyz min values
+    min_x_value_hex = malloc((8 + 1) * sizeof(*min_x_value_hex));
+    if (min_x_value_hex == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *min_x_value_hex in task "
+                    "extract_info_from_ctrl_msg_task");
+    }
+    GetSubString(in_ctrl_msg, 6, 8, min_x_value_hex);
+    //
+    min_y_value_hex = malloc((8 + 1) * sizeof(*min_y_value_hex));
+    if (min_y_value_hex == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *min_y_value_hex in task "
+                    "extract_info_from_ctrl_msg_task");
+    }
+    GetSubString(in_ctrl_msg, 14, 8, min_y_value_hex);
+    //
+    min_z_value_hex = malloc((8 + 1) * sizeof(*min_z_value_hex));
+    if (min_z_value_hex == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *min_z_value_hex in task "
+                    "extract_info_from_ctrl_msg_task");
+    }
+    GetSubString(in_ctrl_msg, 22, 8, min_z_value_hex);
+
+    //                     min_*xyz*_value_8bit_arr
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    // |0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    min_x_value_8bit_arr = malloc((4) * sizeof(*min_x_value_8bit_arr));
+    if (min_x_value_8bit_arr == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *min_x_value_8bit_arr in task "
+                    "extract_info_from_ctrl_msg_task");
+    }
+    min_y_value_8bit_arr = malloc((4) * sizeof(*min_y_value_8bit_arr));
+    if (min_y_value_8bit_arr == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *min_y_value_8bit_arr in task "
+                    "extract_info_from_ctrl_msg_task");
+    }
+    min_z_value_8bit_arr = malloc((4) * sizeof(*min_z_value_8bit_arr));
+    if (min_z_value_8bit_arr == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *min_z_value_8bit_arr in task "
+                    "extract_info_from_ctrl_msg_task");
+    }
+
+    // to store temporarily the subdivisions of min_*xyz*_value_hex,
+    // into 8-bit words so we can use HexadecimalToDecimal function to
+    // get the decimal
+    uint8_t tmp_8bits_section_dec;
+    char *tmp_8bits_section_hex =
+        malloc((2 + 1) * sizeof(*tmp_8bits_section_hex));
+    if (tmp_8bits_section_hex == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *tmp_8bits_section_hex in "
+                    "extract_info_from_ctrl_msg_task");
+    }
+    uint8_t dayi = 3;
+    // the next 'for' loop will break 'min_*xyz*_value_hex' down into in32_t
+    for (size_t i = 0; i < 8; i += 2) {
+      // x_min_value
+      GetSubString(min_x_value_hex, i, 2, tmp_8bits_section_hex);
+      tmp_8bits_section_dec = HexadecimalToDecimal(tmp_8bits_section_hex);
+      min_x_value_8bit_arr[i / 2] = tmp_8bits_section_dec;
+      // y_min_value
+      GetSubString(min_y_value_hex, i, 2, tmp_8bits_section_hex);
+      tmp_8bits_section_dec = HexadecimalToDecimal(tmp_8bits_section_hex);
+      min_y_value_8bit_arr[i / 2] = tmp_8bits_section_dec;
+    }
 
     // freeing up allocate dspace
     free(in_ctrl_msg);

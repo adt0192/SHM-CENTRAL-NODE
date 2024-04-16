@@ -20,6 +20,7 @@
         "*.tcc": "c",
         "random": "c",
         "regex": "c",
-        "type_traits": "c"
+        "type_traits": "c",
+        "numerical_systems_conv.h": "c"
     }
 }
