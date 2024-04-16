@@ -43,6 +43,7 @@
 #include "rylr998.h"
 #include "sdkconfig.h"
 #include <FreeRTOSConfig.h>
+#include <freertos/ringbuf.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -87,6 +88,21 @@ char *is_rylr998_module_init = "N";
 // the full block received from the sensor node it's max 256 bytes
 bool start_uart_block = false;
 bool end_uart_block = false; // not used
+
+// to know when we have a 'ctrl' so we extract the info needed
+//     x_bits_tx       y_bits_tx       z_bits_tx
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|     <<PAYLOAD...>>
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//
+// |    32 bits    |    32 bits    |    32 bits    |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |  min_x_value  |  min_y_value  |  min_z_value  |     <<...PAYLOAD>>
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+bool is_ctrl_msg = false;
+
+// to know the type of message we received
+msg_type in_msg_type;
 //***************************************************************************//
 //********************************** FLAGS **********************************//
 //***************************************************************************//
@@ -98,7 +114,8 @@ static QueueHandle_t uart_queue;
 
 // Handles for the tasks
 static TaskHandle_t check_header_incoming_data_task_handle = NULL,
-                    transmit_ack_task_handle = NULL;
+                    transmit_ack_task_handle = NULL,
+                    extract_info_from_ctrl_msg_task_handle = NULL;
 //***************************************************************************//
 //***************************** HANDLE VARIABLES ****************************//
 //***************************************************************************//
@@ -109,6 +126,13 @@ static TaskHandle_t check_header_incoming_data_task_handle = NULL,
 // testing parameters
 frequency_t test_freq = F_125HZ;
 scale_t test_scale = SCALE_8G;
+
+// to store the 'ctrl' message received to work with it
+char *in_ctrl_msg = NULL;
+
+// RingBuffer variables
+#define RINGBUFFER_SIZE 4096
+#define RINGBUFFER_TYPE RINGBUF_TYPE_BYTEBUF
 
 #define INCOMING_UART_DATA_SIZE 128
 #define FULL_IN_UART_DATA_SIZE 260
@@ -216,6 +240,35 @@ void init_led(void) {
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
+//*************** Extract info from the received ctrl message ***************//
+///////////////////////////////////////////////////////////////////////////////
+static void extract_info_from_ctrl_msg_task(void *pvParameters) {
+  while (1) {
+    // Block to wait for data received (+RCV=) and check if ACK
+    // Block indefinitely (without a timeout, so no need to check the function's
+    // return value) to wait for a notification. Here the RTOS task notification
+    // is being used as a binary semaphore, so the notification value is cleared
+    // to zero on exit. NOTE! Real applications should not block indefinitely,
+    // but instead time out occasionally in order to handle error conditions
+    // that may prevent the interrupt from sending any more notifications.
+    ulTaskNotifyTake(pdTRUE,         // Clear the notification value on exit
+                     portMAX_DELAY); // Block indefinitely
+
+    // Print out remaining task stack memory (words) ************************
+    ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK ****************");
+    ESP_LOGW(TAG, "'extract_info_from_ctrl_msg_task': <%zu>",
+             uxTaskGetStackHighWaterMark(NULL));
+    ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK ****************");
+    // Print out remaining task stack memory (words) ************************
+
+    free(in_ctrl_msg);
+  }
+}
+///////////////////////////////////////////////////////////////////////////////
+//*************** Extract info from the received ctrl message ***************//
+///////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////
 //******************** Transmit ACK of the received data ********************//
 ///////////////////////////////////////////////////////////////////////////////
 static void transmit_ack_task(void *pvParameters) {
@@ -288,6 +341,8 @@ static void transmit_ack_task(void *pvParameters) {
 static void check_header_incoming_data_task(void *pvParameters) {
   char *header_hex_MSB = NULL;
   char *header_hex_LSB = NULL;
+
+  uint8_t in_msg_type_tmp = 0;
   while (1) {
     // Block to wait for data received (+RCV=) and check if ACK
     // Block indefinitely (without a timeout, so no need to check the function's
@@ -348,6 +403,45 @@ static void check_header_incoming_data_task(void *pvParameters) {
     in_message_header_dec = (header_dec_MSB << 8) & 0xFF00;
     in_message_header_dec |= header_dec_LSB;
 
+    // check if the message type is 'ctrl'
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    // |0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7|
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    // | T |       Transaction ID      |
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    // we make an AND operation with '1100 0000 0000 0000' (0xC000)
+    // and shift 14 spaces to the right
+    in_msg_type_tmp = (in_message_header_dec & 0xC000) >> 14;
+    switch (in_msg_type_tmp) {
+    case 0:
+      in_msg_type = rst; // 0000 0000
+      break;
+    case 1:
+      in_msg_type = ctrl; // 0000 0001
+      break;
+    case 2:
+      in_msg_type = data; // 0000 0010
+      break;
+    case 3:
+      in_msg_type = ack; // 0000 0011
+      break;
+    default:
+      break;
+    }
+    if (in_msg_type == ctrl) {
+      // 30 characters to hold from the 4th character on Lora_data.Data
+      in_ctrl_msg = malloc((30 + 1) * sizeof(*header_hex_MSB));
+      if (in_ctrl_msg == NULL) {
+        ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+        ESP_LOGE(TAG, "Failed to allocate *in_ctrl_msg in task "
+                      "check_header_incoming_data_task");
+      }
+      //
+      strcpy(in_ctrl_msg, Lora_data.Data + 4);
+
+      xTaskNotifyGive(extract_info_from_ctrl_msg_task_handle);
+    }
+
     // extract the transaction ID from the incoming header
     uint16_t in_transaction_ID_dec = 0;
     in_transaction_ID_dec = in_message_header_dec & 0x3FFF;
@@ -367,13 +461,15 @@ static void check_header_incoming_data_task(void *pvParameters) {
       // we are sending ACK message thru lora
       is_sending_ack = "Y";
 
-      ///// VISUALIZE **********************************************************
+      ///// VISUALIZE
+      ///**********************************************************
       ESP_LOGE(TAG,
                "******************** FREE HEAP MEMORY ********************");
       ESP_LOGW(TAG, "<%lu> BYTES", xPortGetFreeHeapSize());
       ESP_LOGE(TAG,
                "******************** FREE HEAP MEMORY ********************");
-      ///// VISUALIZE **********************************************************
+      ///// VISUALIZE
+      ///**********************************************************
 
       gpio_set_level(LED_PIN, 1);
       vTaskDelay(pdMS_TO_TICKS(100));
@@ -381,9 +477,10 @@ static void check_header_incoming_data_task(void *pvParameters) {
       vTaskDelay(pdMS_TO_TICKS(100));
 
       // if incoming_message_transaction_ID_dec == MSG_COUNTER_RX - 1 it
-      // means we received a duplicated message because the ACK was not received
-      // on the other side, so we still need to keep sending the ack to the
-      // other side so he knows we already received that previous message
+      // means we received a duplicated message because the ACK was not
+      // received on the other side, so we still need to keep sending the ack
+      // to the other side so he knows we already received that previous
+      // message
       is_duplicated_data = in_transaction_ID_dec == MSG_COUNTER_RX ? "N" : "Y";
 
       ESP_LOGW(TAG, "Waiting 500ms to transmit 'ack' message\n");
@@ -393,11 +490,13 @@ static void check_header_incoming_data_task(void *pvParameters) {
   }
 }
 ///////////////////////////////////////////////////////////////////////////////
-//****************** Check header of incoming data message ******************//
+//****************** Check header of incoming data message
+//******************//
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
-//**************** Task to receeive the data in the UART port ***************//
+//**************** Task to receeive the data in the UART port
+//***************//
 ///////////////////////////////////////////////////////////////////////////////
 // Data event is generated when data is copied out of the fifo and so it is
 // based on hardware fifo size (128) with margin to prevent overflow
@@ -420,28 +519,31 @@ static void uart_task(void *pvParameters) {
     if (xQueueReceive(uart_queue, (void *)&event, portMAX_DELAY)) {
 
       /* ESP_LOGE(TAG,
-               "******************** <MEMORY CHECKING> *********************");
-      ESP_LOGI(TAG, "Heap integrety %i",
+               "******************** <MEMORY CHECKING>
+      *********************"); ESP_LOGI(TAG, "Heap integrety %i",
                heap_caps_check_integrity_all(true));              // Added
       ESP_LOGI(TAG, "FreeHeapSize: %lu", xPortGetFreeHeapSize()); // Added
       ESP_LOGI(TAG, "Bytes free in stack: %zu",
                uxTaskGetStackHighWaterMark(NULL)); // Added
       ESP_LOGE(
           TAG,
-          "******************** <MEMORY CHECKING> *********************\n"); */
+          "******************** <MEMORY CHECKING> *********************\n");
+    */
 
       // ESP_LOGW(TAG, "***DEBUGGING*** ENTERING 'xQueueReceive' in
       // 'uart_task'");
 
       bzero(incoming_uart_data, INCOMING_UART_DATA_SIZE);
 
-      // Print out remaining task stack memory (words) ************************
+      // Print out remaining task stack memory (words)
+      // ************************
       ESP_LOGE(TAG,
                "**************** BYTES FREE IN TASK STACK ****************");
       ESP_LOGW(TAG, "'uart_task': <%zu>", uxTaskGetStackHighWaterMark(NULL));
       ESP_LOGE(TAG,
                "**************** BYTES FREE IN TASK STACK ****************");
-      // Print out remaining task stack memory (words) ************************
+      // Print out remaining task stack memory (words)
+      // ************************
 
       switch (event.type) {
         // Event of UART receving data
@@ -454,7 +556,8 @@ static void uart_task(void *pvParameters) {
         ESP_LOGI(TAG, "Data received from LoRa module: %s", incoming_uart_data);
         ESP_LOGI(TAG, "Length of data received: event.size = %zu", event.size);
 
-        ///// if the module answers +OK and we are sending data ****************
+        ///// if the module answers +OK and we are sending data
+        ///****************
         if ((strncmp((const char *)incoming_uart_data, "+OK", 3) == 0) &&
             (strncmp((const char *)is_sending_ack, "Y", 1) == 0)) {
           // so we already sent ack, we put the flag back to "N"
@@ -470,9 +573,11 @@ static void uart_task(void *pvParameters) {
 
           ESP_LOGW(TAG, "***DEBUGGING*** MSG_COUNTER_RX: <%u>", MSG_COUNTER_RX);
         }
-        ///// if the module answers +OK and we are sending data ****************
+        ///// if the module answers +OK and we are sending data
+        ///****************
 
-        ///// if the module is receiving data, we proccess it ******************
+        ///// if the module is receiving data, we proccess it
+        ///******************
         // but only if the module is fully configured
         if (((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0) ||
              (start_uart_block)) &&
@@ -487,19 +592,19 @@ static void uart_task(void *pvParameters) {
                    event.size);
             // update the amount of data received
             data_received_count += event.size;
-            ESP_LOGW(
-                TAG,
-                "***DEBUGGING*** Inside 'if (data_received_count + event.size "
-                "<= FULL_IN_UART_DATA_SIZE)' -> data_received_count: %u",
-                data_received_count);
+            ESP_LOGW(TAG,
+                     "***DEBUGGING*** Inside 'if (data_received_count + "
+                     "event.size "
+                     "<= FULL_IN_UART_DATA_SIZE)' -> data_received_count: %u",
+                     data_received_count);
           } else {
             ESP_LOGE(TAG, "There's no enough space in 'full_in_uart_data' to "
                           "store received data");
           }
 
-          // if 'event.size == 120' it means we don't have a full block of info,
-          // so we need to wait until we have the full block
-          // so the programm won't enter this section
+          // if 'event.size == 120' it means we don't have a full block of
+          // info, so we need to wait until we have the full block so the
+          // programm won't enter this section
           if (event.size != 120) {
             full_in_uart_data[data_received_count] = '\0';
 
@@ -553,9 +658,10 @@ static void uart_task(void *pvParameters) {
             start_uart_block = false;
             //
           } // if (event.size != 120)
-        } // if ((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0) &&
-          // (strncmp((const char *)is_rylr998_module_init, "Y", 1) == 0))
-        ///// if the module is receiving data, we proccess it ******************
+        }   // if ((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0)
+          // && (strncmp((const char *)is_rylr998_module_init, "Y", 1) == 0))
+        ///// if the module is receiving data, we proccess it
+        ///******************
         break;
 
       // Event of HW FIFO overflow detected
@@ -573,8 +679,8 @@ static void uart_task(void *pvParameters) {
       case UART_BUFFER_FULL:
         ESP_LOGI(TAG, "ring buffer full");
         // If buffer full happened, you should consider increasing your buffer
-        // size As an example, we directly flush the rx buffer here in order to
-        // read more data.
+        // size As an example, we directly flush the rx buffer here in order
+        // to read more data.
         uart_flush_input(UART_NUM);
         xQueueReset(uart_queue);
         break;
@@ -593,11 +699,13 @@ static void uart_task(void *pvParameters) {
   vTaskDelete(NULL);
 }
 ///////////////////////////////////////////////////////////////////////////////
-//**************** Task to receeive the data in the UART port ***************//
+//**************** Task to receeive the data in the UART port
+//***************//
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
-//*************************** UART Initialization ***************************//
+//*************************** UART Initialization
+//***************************//
 ///////////////////////////////////////////////////////////////////////////////
 void init_uart(void) {
   uart_config_t uart_config = {
@@ -630,11 +738,13 @@ void init_uart(void) {
   ESP_LOGI(TAG, "UART Interface Configuration !!!COMPLETED!!!");
 }
 ///////////////////////////////////////////////////////////////////////////////
-//*************************** UART Initialization ***************************//
+//*************************** UART Initialization
+//***************************//
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
-//******************************** Main Task ********************************//
+//******************************** Main Task
+//********************************//
 ///////////////////////////////////////////////////////////////////////////////
 void app_main(void) {
   init_led();
@@ -671,6 +781,16 @@ void app_main(void) {
   ESP_LOGW(TAG, "After 'transmit_ack_task' created");
   ESP_LOGW(TAG, "<%lu> BYTES", xPortGetFreeHeapSize());
   ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
+
+  xTaskCreatePinnedToCore(extract_info_from_ctrl_msg_task,
+                          "extract_info_from_ctrl_msg_task", TASK_MEMORY * 2,
+                          NULL, 10, &extract_info_from_ctrl_msg_task_handle,
+                          tskNO_AFFINITY);
+  ESP_LOGI(TAG, "Task 'extract_info_from_ctrl_msg_task' !!!CREATED!!!");
+  ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
+  ESP_LOGW(TAG, "After 'extract_info_from_ctrl_msg_task' created");
+  ESP_LOGW(TAG, "<%lu> BYTES", xPortGetFreeHeapSize());
+  ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
   ///// tasks creation /////
   //************************************************************************//
 
@@ -683,5 +803,6 @@ void app_main(void) {
   ESP_LOGI(TAG, "******************************************************\n");
 }
 ///////////////////////////////////////////////////////////////////////////////
-//******************************** Main Task ********************************//
+//******************************** Main Task
+//********************************//
 ///////////////////////////////////////////////////////////////////////////////
