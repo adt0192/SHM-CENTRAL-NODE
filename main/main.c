@@ -279,6 +279,8 @@ static void transmit_ack_task(void *pvParameters) {
 //****************** Check header of incoming data message ******************//
 ///////////////////////////////////////////////////////////////////////////////
 static void check_header_incoming_data_task(void *pvParameters) {
+  char *header_hex_MSB = NULL;
+  char *header_hex_LSB = NULL;
   while (1) {
     // Block to wait for data received (+RCV=) and check if ACK
     // Block indefinitely (without a timeout, so no need to check the function's
@@ -290,17 +292,22 @@ static void check_header_incoming_data_task(void *pvParameters) {
     ulTaskNotifyTake(pdTRUE,         // Clear the notification value on exit
                      portMAX_DELAY); // Block indefinitely
 
+    ESP_LOGW(TAG,
+             "***DEBUGGING*** Inside 'check_header_incoming_data_task' -> "
+             "Lora_data.Data: %s",
+             Lora_data.Data);
+
     ///// extract the header of the incoming data ******************************
     // allocating memory for the header hexadecimal string
     // ALWAYS 4 digits: 0xAAAA
-    char *header_hex_MSB = malloc((2 + 1) * sizeof(*header_hex_MSB));
+    header_hex_MSB = malloc((2 + 1) * sizeof(*header_hex_MSB));
     if (header_hex_MSB == NULL) {
       ESP_LOGE(TAG, "NOT ENOUGH HEAP");
       ESP_LOGE(TAG, "Failed to allocate *header_hex_MSB in task "
                     "check_header_incoming_data_task");
     }
-
-    char *header_hex_LSB = malloc((2 + 1) * sizeof(*header_hex_LSB));
+    //
+    header_hex_LSB = malloc((2 + 1) * sizeof(*header_hex_LSB));
     if (header_hex_LSB == NULL) {
       ESP_LOGE(TAG, "NOT ENOUGH HEAP");
       ESP_LOGE(TAG, "Failed to allocate *header_hex_LSB in task "
@@ -310,11 +317,14 @@ static void check_header_incoming_data_task(void *pvParameters) {
     GetSubString(Lora_data.Data, 2, 2, header_hex_LSB);
     ESP_LOGW(TAG, "***DEBUGGING*** header_hex_MSB: <%s>", header_hex_MSB);
     ESP_LOGW(TAG, "***DEBUGGING*** header_hex_LSB: <%s>", header_hex_LSB);
-
+    //
     uint8_t header_dec_MSB = HexadecimalToDecimal(header_hex_MSB);
     uint8_t header_dec_LSB = HexadecimalToDecimal(header_hex_LSB);
     ESP_LOGW(TAG, "***DEBUGGING*** header_dec_MSB: <%u>", header_dec_MSB);
-    ESP_LOGW(TAG, "***DEBUGGING*** header_dec_MSB: <%u>", header_dec_MSB);
+    ESP_LOGW(TAG, "***DEBUGGING*** header_dec_LSB: <%u>", header_dec_LSB);
+    //
+    free(header_hex_MSB);
+    free(header_hex_LSB);
     ///// extract the header of the incoming data ******************************
 
     // combine 'header_dec_MSB' and 'header_dec_LSB' into only one variable so
@@ -473,6 +483,8 @@ static void uart_task(void *pvParameters) {
             // we mark the end of the block
             start_uart_block = false;
 
+            full_in_uart_data[data_received_count] = '\0';
+
             ESP_LOGW(TAG, "***DEBUGGING*** full_in_uart_data: %s",
                      full_in_uart_data);
             ESP_LOGW(TAG, "***DEBUGGING*** data_received_count: %u",
@@ -495,6 +507,7 @@ static void uart_task(void *pvParameters) {
                 break;
               case 3:
                 Lora_data.Data = token;
+                Lora_data.Data[strlen(Lora_data.Data)] = '\0';
                 ESP_LOGW(TAG, "***DEBUGGING*** Lora_data.Data: %s",
                          Lora_data.Data);
                 break;
@@ -507,6 +520,11 @@ static void uart_task(void *pvParameters) {
                 // send a notification to check_header_incoming_data_task,
                 // bringing it out of the 'Blocked' state
                 vTaskDelay(pdMS_TO_TICKS(DELAY / 10));
+                ESP_LOGW(TAG,
+                         "***DEBUGGING*** Inside 'uart_task' before "
+                         "'xTaskNotifyGive' -> "
+                         "Lora_data.Data: %s",
+                         Lora_data.Data);
                 xTaskNotifyGive(check_header_incoming_data_task_handle);
                 break;
               default:
@@ -517,6 +535,11 @@ static void uart_task(void *pvParameters) {
             bzero(full_in_uart_data, FULL_IN_UART_DATA_SIZE);
             data_received_count = 0;
           } // if (event.size != 120)
+          ESP_LOGW(TAG,
+                   "***DEBUGGING*** Inside 'uart_task' after 'if (event.size "
+                   "!= 120)' -> "
+                   "Lora_data.Data: %s",
+                   Lora_data.Data);
         } // if ((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0) &&
           // (strncmp((const char *)is_rylr998_module_init, "Y", 1) == 0))
         ///// if the module is receiving data, we proccess it ******************
@@ -642,7 +665,9 @@ void app_main(void) {
   ESP_LOGI(TAG, "Waiting 50 ms");
   vTaskDelay(pdMS_TO_TICKS(50));
 
+  ESP_LOGI(TAG, "******************************************************");
   ESP_LOGI(TAG, "****************** READY TO RECEIVE ******************");
+  ESP_LOGI(TAG, "******************************************************\n");
 }
 ///////////////////////////////////////////////////////////////////////////////
 //******************************** Main Task ********************************//
