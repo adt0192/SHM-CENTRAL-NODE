@@ -238,6 +238,13 @@ static void transmit_ack_task(void *pvParameters) {
     ulTaskNotifyTake(pdTRUE,         // Clear the notification value on exit
                      portMAX_DELAY); // Block indefinitely
 
+    // Print out remaining task stack memory (words) ************************
+    ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK ****************");
+    ESP_LOGW(TAG, "'transmit_ack_task': <%zu>",
+             uxTaskGetStackHighWaterMark(NULL));
+    ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK ****************");
+    // Print out remaining task stack memory (words) ************************
+
     if ((strncmp(is_duplicated_data, "Y", 1) == 0)) {
       // if what we received was a data with a previous transaction ID, we still
       // need to send ACK for that transaction ID, because it means the other
@@ -292,10 +299,17 @@ static void check_header_incoming_data_task(void *pvParameters) {
     ulTaskNotifyTake(pdTRUE,         // Clear the notification value on exit
                      portMAX_DELAY); // Block indefinitely
 
-    ESP_LOGW(TAG,
+    // Print out remaining task stack memory (words) ************************
+    ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK ****************");
+    ESP_LOGW(TAG, "'check_header_incoming_data_task': <%zu>",
+             uxTaskGetStackHighWaterMark(NULL));
+    ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK ****************");
+    // Print out remaining task stack memory (words) ************************
+
+    /* ESP_LOGW(TAG,
              "***DEBUGGING*** Inside 'check_header_incoming_data_task' -> "
              "Lora_data.Data: <%s>",
-             Lora_data.Data);
+             Lora_data.Data); */
 
     ///// extract the header of the incoming data ******************************
     // allocating memory for the header hexadecimal string
@@ -315,13 +329,13 @@ static void check_header_incoming_data_task(void *pvParameters) {
     }
     GetSubString(Lora_data.Data, 0, 2, header_hex_MSB);
     GetSubString(Lora_data.Data, 2, 2, header_hex_LSB);
-    ESP_LOGW(TAG, "***DEBUGGING*** header_hex_MSB: <%s>", header_hex_MSB);
-    ESP_LOGW(TAG, "***DEBUGGING*** header_hex_LSB: <%s>", header_hex_LSB);
+    // ESP_LOGW(TAG, "***DEBUGGING*** header_hex_MSB: <%s>", header_hex_MSB);
+    // ESP_LOGW(TAG, "***DEBUGGING*** header_hex_LSB: <%s>", header_hex_LSB);
     //
     uint8_t header_dec_MSB = HexadecimalToDecimal(header_hex_MSB);
     uint8_t header_dec_LSB = HexadecimalToDecimal(header_hex_LSB);
-    ESP_LOGW(TAG, "***DEBUGGING*** header_dec_MSB: <%u>", header_dec_MSB);
-    ESP_LOGW(TAG, "***DEBUGGING*** header_dec_LSB: <%u>", header_dec_LSB);
+    // ESP_LOGW(TAG, "***DEBUGGING*** header_dec_MSB: <%u>", header_dec_MSB);
+    // ESP_LOGW(TAG, "***DEBUGGING*** header_dec_LSB: <%u>", header_dec_LSB);
     //
     free(header_hex_MSB);
     free(header_hex_LSB);
@@ -337,7 +351,7 @@ static void check_header_incoming_data_task(void *pvParameters) {
     // extract the transaction ID from the incoming header
     uint16_t in_transaction_ID_dec = 0;
     in_transaction_ID_dec = in_message_header_dec & 0x3FFF;
-    ESP_LOGW(TAG, "***DEBUGGING*** in_transaction_ID_dec: <%u>",
+    ESP_LOGW(TAG, "***DEBUGGING*** Transaction ID of incoming message: <%u>",
              in_transaction_ID_dec);
 
     // we only send ack if the transaction ID of the incoming data is equal to
@@ -372,8 +386,8 @@ static void check_header_incoming_data_task(void *pvParameters) {
       // other side so he knows we already received that previous message
       is_duplicated_data = in_transaction_ID_dec == MSG_COUNTER_RX ? "N" : "Y";
 
-      ESP_LOGW(TAG, "Waiting 1 second to transmit 'ack' message");
-      vTaskDelay(pdMS_TO_TICKS(DELAY * 2));
+      ESP_LOGW(TAG, "Waiting 500ms to transmit 'ack' message\n");
+      vTaskDelay(pdMS_TO_TICKS(DELAY));
       xTaskNotifyGive(transmit_ack_task_handle);
     }
   }
@@ -403,8 +417,7 @@ static void uart_task(void *pvParameters) {
 
   while (1) {
     // waiting for UART event
-    if ((xQueueReceive(uart_queue, (void *)&event, portMAX_DELAY)) &&
-        (!start_uart_block)) {
+    if (xQueueReceive(uart_queue, (void *)&event, portMAX_DELAY)) {
 
       /* ESP_LOGE(TAG,
                "******************** <MEMORY CHECKING> *********************");
@@ -422,9 +435,13 @@ static void uart_task(void *pvParameters) {
 
       bzero(incoming_uart_data, INCOMING_UART_DATA_SIZE);
 
-      // Print out remaining task stack memory (words)
-      ESP_LOGW(TAG, "Bytes free in 'uart_task' stack: <%zu>",
-               uxTaskGetStackHighWaterMark(NULL));
+      // Print out remaining task stack memory (words) ************************
+      ESP_LOGE(TAG,
+               "**************** BYTES FREE IN TASK STACK ****************");
+      ESP_LOGW(TAG, "'uart_task': <%zu>", uxTaskGetStackHighWaterMark(NULL));
+      ESP_LOGE(TAG,
+               "**************** BYTES FREE IN TASK STACK ****************");
+      // Print out remaining task stack memory (words) ************************
 
       switch (event.type) {
         // Event of UART receving data
@@ -435,7 +452,7 @@ static void uart_task(void *pvParameters) {
         uart_read_bytes(UART_NUM, incoming_uart_data, event.size,
                         pdMS_TO_TICKS(500));
         ESP_LOGI(TAG, "Data received from LoRa module: %s", incoming_uart_data);
-        ESP_LOGI(TAG, "Length of data received: %zu", event.size);
+        ESP_LOGI(TAG, "Length of data received: event.size = %zu", event.size);
 
         ///// if the module answers +OK and we are sending data ****************
         if ((strncmp((const char *)incoming_uart_data, "+OK", 3) == 0) &&
@@ -522,17 +539,7 @@ static void uart_task(void *pvParameters) {
                 // send a notification to check_header_incoming_data_task,
                 // bringing it out of the 'Blocked' state
                 vTaskDelay(pdMS_TO_TICKS(DELAY / 10));
-                ESP_LOGW(TAG,
-                         "***DEBUGGING*** Inside 'uart_task' before "
-                         "'xTaskNotifyGive' -> "
-                         "Lora_data.Data: <%s>",
-                         Lora_data.Data);
                 xTaskNotifyGive(check_header_incoming_data_task_handle);
-                ESP_LOGW(TAG,
-                         "***DEBUGGING*** Inside 'uart_task' after "
-                         "'xTaskNotifyGive' -> "
-                         "Lora_data.Data: <%s>",
-                         Lora_data.Data);
                 break;
               default:
                 break;
@@ -541,9 +548,11 @@ static void uart_task(void *pvParameters) {
             // zero out
             bzero(full_in_uart_data, FULL_IN_UART_DATA_SIZE);
             data_received_count = 0;
+            //
+            // we mark the end of the block
+            start_uart_block = false;
+            //
           } // if (event.size != 120)
-          // we mark the end of the block
-          start_uart_block = false;
         } // if ((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0) &&
           // (strncmp((const char *)is_rylr998_module_init, "Y", 1) == 0))
         ///// if the module is receiving data, we proccess it ******************

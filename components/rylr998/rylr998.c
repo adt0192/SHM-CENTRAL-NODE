@@ -174,7 +174,7 @@ void lora_send(int address, const char *data) {
    */
   bytes_pushed_to_tx_fifo = uart_write_bytes(
       UART_NUM, (const char *)command_data, strlen(command_data));
-  ESP_LOGW(TAG, "***DEBUGGING*** bytes_pushed_to_tx_fifo= <%d>",
+  ESP_LOGW(TAG, "***DEBUGGING*** bytes_pushed_to_tx_fifo= <%d>\n",
            bytes_pushed_to_tx_fifo);
   /* ESP_LOGW(
       TAG,
