@@ -404,7 +404,8 @@ static void uart_task(void *pvParameters) {
 
   while (1) {
     // waiting for UART event
-    if (xQueueReceive(uart_queue, (void *)&event, portMAX_DELAY)) {
+    if ((xQueueReceive(uart_queue, (void *)&event, portMAX_DELAY)) &&
+        (!start_uart_block)) {
 
       ESP_LOGE(TAG,
                "******************** <MEMORY CHECKING> *********************");
@@ -451,8 +452,6 @@ static void uart_task(void *pvParameters) {
           }
 
           ESP_LOGW(TAG, "***DEBUGGING*** MSG_COUNTER_RX: <%u>", MSG_COUNTER_RX);
-
-          break;
         }
         ///// if the module answers +OK and we are sending data ****************
 
@@ -480,9 +479,6 @@ static void uart_task(void *pvParameters) {
           // so we need to wait until we have the full block
           // so the programm won't enter this section
           if (event.size != 120) {
-            // we mark the end of the block
-            start_uart_block = false;
-
             full_in_uart_data[data_received_count] = '\0';
 
             ESP_LOGW(TAG, "***DEBUGGING*** full_in_uart_data: %s",
@@ -508,7 +504,7 @@ static void uart_task(void *pvParameters) {
               case 3:
                 Lora_data.Data = token;
                 Lora_data.Data[strlen(Lora_data.Data)] = '\0';
-                ESP_LOGW(TAG, "***DEBUGGING*** Lora_data.Data: %s",
+                ESP_LOGW(TAG, "***DEBUGGING*** Lora_data.Data: <%s>",
                          Lora_data.Data);
                 break;
               case 4:
@@ -523,7 +519,7 @@ static void uart_task(void *pvParameters) {
                 ESP_LOGW(TAG,
                          "***DEBUGGING*** Inside 'uart_task' before "
                          "'xTaskNotifyGive' -> "
-                         "Lora_data.Data: %s",
+                         "Lora_data.Data: <%s>",
                          Lora_data.Data);
                 xTaskNotifyGive(check_header_incoming_data_task_handle);
                 break;
@@ -538,8 +534,11 @@ static void uart_task(void *pvParameters) {
           ESP_LOGW(TAG,
                    "***DEBUGGING*** Inside 'uart_task' after 'if (event.size "
                    "!= 120)' -> "
-                   "Lora_data.Data: %s",
+                   "Lora_data.Data: <%s>",
                    Lora_data.Data);
+
+          // we mark the end of the block
+          start_uart_block = false;
         } // if ((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0) &&
           // (strncmp((const char *)is_rylr998_module_init, "Y", 1) == 0))
         ///// if the module is receiving data, we proccess it ******************
