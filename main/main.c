@@ -130,6 +130,8 @@ scale_t test_scale = SCALE_8G;
 // to store the 'ctrl' message received to work with it
 char *in_ctrl_msg = NULL;
 
+double resolution = 0;
+
 // RingBuffer variables
 #define RINGBUFFER_SIZE 4096
 #define RINGBUFFER_TYPE RINGBUF_TYPE_BYTEBUF
@@ -138,12 +140,15 @@ char *in_ctrl_msg = NULL;
 #define FULL_IN_UART_DATA_SIZE 260
 
 // max and min values of each axis set of samples
+int32_t min_x_value_int32 = 0;
+int32_t min_y_value_int32 = 0;
+int32_t min_z_value_int32 = 0;
 double min_x_value = 0; // min x initializing
 double max_x_value = 0; // max x initializing
 double min_y_value = 0; // min y initializing
 double max_y_value = 0; // max y initializing
 double min_z_value = 0; // min z initializing
-double max_z_value = 0; // max z initializing
+double max_z_value = 0; // max z initializin
 
 // to keep tracking of the sample we are extracting from
 // *_samples_compressed_bin that we are copying to total_bits_tx_after_pad0
@@ -225,6 +230,32 @@ static const char *TAG = "SHM CENTRAL NODE";
 //+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+//
 
 ///////////////////////////////////////////////////////////////////////////////
+//**************************** ACCEL RESOLUTION *****************************//
+///////////////////////////////////////////////////////////////////////////////
+double accel_res(scale_t scale) {
+  // calculating the resolution accoirding to accel selected scale
+  double resolution = 0;
+  switch (scale) {
+  case SCALE_2G:
+    resolution = (2.048 * 2) / pow(2, 20);
+    break;
+  case SCALE_4G:
+    resolution = (4.096 * 2) / pow(2, 20);
+    break;
+  case SCALE_8G:
+    resolution = (8.192 * 2) / pow(2, 20);
+    break;
+  default:
+    break;
+  }
+
+  return resolution;
+}
+///////////////////////////////////////////////////////////////////////////////
+//**************************** ACCEL RESOLUTION *****************************//
+///////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////
 //************************** Initialization of LED  *************************//
 ///////////////////////////////////////////////////////////////////////////////
 void init_led(void) {
@@ -270,10 +301,10 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
                      portMAX_DELAY); // Block indefinitely
 
     // Print out remaining task stack memory (words) ************************
-    ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK ****************");
-    ESP_LOGW(TAG, "'extract_info_from_ctrl_msg_task': <%zu>",
-             uxTaskGetStackHighWaterMark(NULL));
-    ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK ****************");
+    /*  ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK
+     ****************"); ESP_LOGW(TAG, "'extract_info_from_ctrl_msg_task':
+     <%zu>", uxTaskGetStackHighWaterMark(NULL)); ESP_LOGE(TAG, "****************
+     BYTES FREE IN TASK STACK ****************"); */
     // Print out remaining task stack memory (words) ************************
 
     //     x_bits_tx       y_bits_tx       z_bits_tx
@@ -285,7 +316,8 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     // |  min_x_value  |  min_y_value  |  min_z_value  |     <<...PAYLOAD>>
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    // working with the xyz amount of bits values
+
+    // working with the xyz amount of bits values ******************************
     x_bits_hex = malloc((2 + 1) * sizeof(*x_bits_hex));
     if (x_bits_hex == NULL) {
       ESP_LOGE(TAG, "NOT ENOUGH HEAP");
@@ -315,8 +347,9 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
     GetSubString(in_ctrl_msg, 4, 2, z_bits_hex);
     z_bits = HexadecimalToDecimal(z_bits_hex);
     free(z_bits_hex);
+    // working with the xyz amount of bits values ******************************
 
-    // working with xyz min values
+    // working with xyz min values *********************************************
     min_x_value_hex = malloc((8 + 1) * sizeof(*min_x_value_hex));
     if (min_x_value_hex == NULL) {
       ESP_LOGE(TAG, "NOT ENOUGH HEAP");
@@ -324,6 +357,7 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
                     "extract_info_from_ctrl_msg_task");
     }
     GetSubString(in_ctrl_msg, 6, 8, min_x_value_hex);
+    ESP_LOGW(TAG, "***DEBUGGING*** min_x_value_hex: <%s>", min_x_value_hex);
     //
     min_y_value_hex = malloc((8 + 1) * sizeof(*min_y_value_hex));
     if (min_y_value_hex == NULL) {
@@ -332,6 +366,7 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
                     "extract_info_from_ctrl_msg_task");
     }
     GetSubString(in_ctrl_msg, 14, 8, min_y_value_hex);
+    ESP_LOGW(TAG, "***DEBUGGING*** min_y_value_hex: <%s>", min_y_value_hex);
     //
     min_z_value_hex = malloc((8 + 1) * sizeof(*min_z_value_hex));
     if (min_z_value_hex == NULL) {
@@ -340,6 +375,7 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
                     "extract_info_from_ctrl_msg_task");
     }
     GetSubString(in_ctrl_msg, 22, 8, min_z_value_hex);
+    ESP_LOGW(TAG, "***DEBUGGING*** min_z_value_hex: <%s>", min_z_value_hex);
 
     //                     min_*xyz*_value_8bit_arr
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -375,21 +411,63 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
       ESP_LOGE(TAG, "Failed to allocate *tmp_8bits_section_hex in "
                     "extract_info_from_ctrl_msg_task");
     }
-    uint8_t dayi = 3;
     // the next 'for' loop will break 'min_*xyz*_value_hex' down into in32_t
     for (size_t i = 0; i < 8; i += 2) {
       // x_min_value
       GetSubString(min_x_value_hex, i, 2, tmp_8bits_section_hex);
       tmp_8bits_section_dec = HexadecimalToDecimal(tmp_8bits_section_hex);
       min_x_value_8bit_arr[i / 2] = tmp_8bits_section_dec;
+      ESP_LOGW(TAG, "***DEBUGGING*** min_x_value_8bit_arr[%zu]: <%u>", i / 2,
+               min_x_value_8bit_arr[i / 2]);
       // y_min_value
       GetSubString(min_y_value_hex, i, 2, tmp_8bits_section_hex);
       tmp_8bits_section_dec = HexadecimalToDecimal(tmp_8bits_section_hex);
       min_y_value_8bit_arr[i / 2] = tmp_8bits_section_dec;
+      ESP_LOGW(TAG, "***DEBUGGING*** min_y_value_8bit_arr[%zu]: <%u>", i / 2,
+               min_y_value_8bit_arr[i / 2]);
+      // z_min_value
+      GetSubString(min_z_value_hex, i, 2, tmp_8bits_section_hex);
+      tmp_8bits_section_dec = HexadecimalToDecimal(tmp_8bits_section_hex);
+      min_z_value_8bit_arr[i / 2] = tmp_8bits_section_dec;
+      ESP_LOGW(TAG, "***DEBUGGING*** min_z_value_8bit_arr[%zu]: <%u>", i / 2,
+               min_z_value_8bit_arr[i / 2]);
     }
+    free(min_x_value_hex);
+    free(min_y_value_hex);
+    free(min_z_value_hex);
+
+    // combine each of the 4 'uint8_t' in 'min_*xyz*_value_8bit_arr' array
+    // into a unique int32_t value
+    for (size_t i = 0; i < 4; i++) {
+      min_x_value_int32 |= ((int32_t)min_x_value_8bit_arr[i]) << (8 * i);
+      min_y_value_int32 |= ((int32_t)min_y_value_8bit_arr[i]) << (8 * i);
+      min_z_value_int32 |= ((int32_t)min_z_value_8bit_arr[i]) << (8 * i);
+    }
+    ESP_LOGW(TAG, "***DEBUGGING*** min_x_value_int32: <%ld>",
+             min_x_value_int32);
+    ESP_LOGW(TAG, "***DEBUGGING*** min_y_value_int32: <%ld>",
+             min_y_value_int32);
+    ESP_LOGW(TAG, "***DEBUGGING*** min_z_value_int32: <%ld>",
+             min_z_value_int32);
+    free(min_x_value_8bit_arr);
+    free(min_y_value_8bit_arr);
+    free(min_z_value_8bit_arr);
 
     // freeing up allocate dspace
     free(in_ctrl_msg);
+
+    resolution = accel_res(test_scale);
+    min_x_value = min_x_value_int32 * resolution;
+    min_y_value = min_x_value_int32 * resolution;
+    min_z_value = min_x_value_int32 * resolution;
+    ESP_LOGE(TAG, "********************** MIN VALUES **********************");
+    ESP_LOGI(TAG, "min_x_value= <%.15f>", min_x_value);
+    ESP_LOGI(TAG, "min_y_value= <%.15f>", min_y_value);
+    ESP_LOGI(TAG, "min_z_value= <%.15f>", min_z_value);
+    ESP_LOGI(TAG, "x_bits= <%u>", x_bits);
+    ESP_LOGI(TAG, "y_bits= <%u>", y_bits);
+    ESP_LOGI(TAG, "z_bits= <%u>", z_bits);
+    ESP_LOGE(TAG, "********************** MIN VALUES **********************");
   }
 }
 ///////////////////////////////////////////////////////////////////////////////
