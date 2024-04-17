@@ -2,14 +2,15 @@
 //************************************D´A************************************//
 ///////////////////////////////////////////////////////////////////////////////
 // *****************************************************************************
-// ** Project name:               Reyax LoRa Module RYLR998 Testing
+// ** Project name:               SHM CENTRAL NODE
 // ** Created by:                 Andy Duarte Taño
-// ** Created:                    06/11/2023
-// ** Version:                    RX Code
-// ** Last modified:
-// ** Software:                   C/C++, ESP-IDF Framework, PlatformIO
-// ** Hardware:                   ESP32-S3-DevKit-C1, Reyax RYLR998 LoRa Module
+// ** Created:                    25/03/2024
+// ** Last modified:              17/04/2024
+// ** Software:                   C/C++, ESP-IDF Framework, VS Code
+// ** Hardware:                   ESP32-Ethernet-Kit_A_V1.2
+//                                Reyax RYLR998 LoRa Module
 // ** Contact:                    andyduarte0192@gmail.com
+//                                andyduarte0192@ugr.es
 
 // ** Copyright (c) 2023, Andy Duarte Taño. All rights reserved.
 
@@ -110,12 +111,15 @@ msg_type in_msg_type;
 //***************************************************************************//
 //***************************** HANDLE VARIABLES ****************************//
 //***************************************************************************//
+RingbufHandle_t in_block_data_rbuf_handle;
+
 static QueueHandle_t uart_queue;
 
 // Handles for the tasks
 static TaskHandle_t check_header_incoming_data_task_handle = NULL,
                     transmit_ack_task_handle = NULL,
-                    extract_info_from_ctrl_msg_task_handle = NULL;
+                    extract_info_from_ctrl_msg_task_handle = NULL,
+                    decode_rcv_blocked_data_task_handle = NULL;
 //***************************************************************************//
 //***************************** HANDLE VARIABLES ****************************//
 //***************************************************************************//
@@ -268,6 +272,33 @@ void init_led(void) {
 }
 ///////////////////////////////////////////////////////////////////////////////
 //************************** Initialization of LED  *************************//
+///////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////
+//******************* Decode the data received in blocks ********************//
+///////////////////////////////////////////////////////////////////////////////
+static void decode_rcv_blocked_data_task(void *pvParameters) {
+  while (1) {
+    // Block to wait for data received (+RCV=) and check if ACK
+    // Block indefinitely (without a timeout, so no need to check the function's
+    // return value) to wait for a notification. Here the RTOS task notification
+    // is being used as a binary semaphore, so the notification value is cleared
+    // to zero on exit. NOTE! Real applications should not block indefinitely,
+    // but instead time out occasionally in order to handle error conditions
+    // that may prevent the interrupt from sending any more notifications.
+    ulTaskNotifyTake(pdTRUE,         // Clear the notification value on exit
+                     portMAX_DELAY); // Block indefinitely
+
+    // Print out remaining task stack memory (words) ************************
+    /*  ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK
+     ****************"); ESP_LOGW(TAG, "'decode_rcv_blocked_data_task':
+     <%zu>", uxTaskGetStackHighWaterMark(NULL)); ESP_LOGE(TAG, "****************
+     BYTES FREE IN TASK STACK ****************"); */
+    // Print out remaining task stack memory (words) ************************
+  }
+}
+///////////////////////////////////////////////////////////////////////////////
+//******************* Decode the data received in blocks ********************//
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -439,9 +470,9 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
     // combine each of the 4 'uint8_t' in 'min_*xyz*_value_8bit_arr' array
     // into a unique int32_t value
     for (size_t i = 0; i < 4; i++) {
-      min_x_value_int32 |= ((int32_t)min_x_value_8bit_arr[i]) << (8 * i);
-      min_y_value_int32 |= ((int32_t)min_y_value_8bit_arr[i]) << (8 * i);
-      min_z_value_int32 |= ((int32_t)min_z_value_8bit_arr[i]) << (8 * i);
+      min_x_value_int32 |= ((int32_t)min_x_value_8bit_arr[i]) << (8 * (3 - i));
+      min_y_value_int32 |= ((int32_t)min_y_value_8bit_arr[i]) << (8 * (3 - i));
+      min_z_value_int32 |= ((int32_t)min_z_value_8bit_arr[i]) << (8 * (3 - i));
     }
     ESP_LOGW(TAG, "***DEBUGGING*** min_x_value_int32: <%ld>",
              min_x_value_int32);
@@ -458,8 +489,8 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
 
     resolution = accel_res(test_scale);
     min_x_value = min_x_value_int32 * resolution;
-    min_y_value = min_x_value_int32 * resolution;
-    min_z_value = min_x_value_int32 * resolution;
+    min_y_value = min_y_value_int32 * resolution;
+    min_z_value = min_z_value_int32 * resolution;
     ESP_LOGE(TAG, "********************** MIN VALUES **********************");
     ESP_LOGI(TAG, "min_x_value= <%.15f>", min_x_value);
     ESP_LOGI(TAG, "min_y_value= <%.15f>", min_y_value);
@@ -840,6 +871,14 @@ static void uart_task(void *pvParameters) {
                 Lora_data.Data[strlen(Lora_data.Data)] = '\0';
                 ESP_LOGW(TAG, "***DEBUGGING*** Lora_data.Data: <%s>",
                          Lora_data.Data);
+
+                // send the received block to ring buffer
+                UBaseType_t res_send_rbuf = xRingbufferSend(
+                    in_block_data_rbuf_handle, Lora_data.Data,
+                    sizeof(Lora_data.Data), pdMS_TO_TICKS(DELAY / 10));
+                if (res_send_rbuf != pdTRUE) {
+                  ESP_LOGE(TAG, "Failed to send item\n");
+                }
                 break;
               case 4:
                 Lora_data.SignalStrength = token;
@@ -953,6 +992,12 @@ void init_uart(void) {
 //********************************//
 ///////////////////////////////////////////////////////////////////////////////
 void app_main(void) {
+  in_block_data_rbuf_handle =
+      xRingbufferCreate(RINGBUFFER_SIZE, RINGBUFFER_TYPE);
+  if (in_block_data_rbuf_handle == NULL) {
+    ESP_LOGE(TAG, "Failed to create ring buffer\n");
+  }
+
   init_led();
   ESP_LOGI(TAG, "Waiting 50 ms");
   vTaskDelay(pdMS_TO_TICKS(50));
@@ -995,6 +1040,16 @@ void app_main(void) {
   ESP_LOGI(TAG, "Task 'extract_info_from_ctrl_msg_task' !!!CREATED!!!");
   ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
   ESP_LOGW(TAG, "After 'extract_info_from_ctrl_msg_task' created");
+  ESP_LOGW(TAG, "<%lu> BYTES", xPortGetFreeHeapSize());
+  ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
+
+  xTaskCreatePinnedToCore(decode_rcv_blocked_data_task,
+                          "decode_rcv_blocked_data_task", TASK_MEMORY * 2, NULL,
+                          10, &decode_rcv_blocked_data_task_handle,
+                          tskNO_AFFINITY);
+  ESP_LOGI(TAG, "Task 'decode_rcv_blocked_data_task' !!!CREATED!!!");
+  ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
+  ESP_LOGW(TAG, "After 'decode_rcv_blocked_data_task' created");
   ESP_LOGW(TAG, "<%lu> BYTES", xPortGetFreeHeapSize());
   ESP_LOGE(TAG, "******************** FREE HEAP MEMORY ********************");
   ///// tasks creation /////
