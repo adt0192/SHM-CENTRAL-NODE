@@ -351,6 +351,11 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     ulTaskNotifyTake(pdTRUE,         // Clear the notification value on exit
                      portMAX_DELAY); // Block indefinitely
 
+    ESP_LOGI(TAG, "Waiting 6 seconds");
+    gpio_set_level(LED_PIN, 1);
+    vTaskDelay(pdMS_TO_TICKS(6000));
+    gpio_set_level(LED_PIN, 0);
+
     // Print out remaining task stack memory (words) ************************
     /*  ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK
      ****************"); ESP_LOGW(TAG, "'decode_rcv_blocked_data_task':
@@ -866,6 +871,25 @@ static void check_header_incoming_data_task(void *pvParameters) {
       // we are sending ACK message thru lora
       is_sending_ack = "Y";
 
+      // *********************** SENDING TO RING BUFFER ***********************
+      // *********************** SENDING TO RING BUFFER ***********************
+      // *********************** SENDING TO RING BUFFER ***********************
+      // only if 'in_transaction_ID_dec == MSG_COUNTER_RX' it's true, it means
+      // we didn't receive a dplicated message, so it's safe to send to ring
+      // buffer
+      if (in_transaction_ID_dec == MSG_COUNTER_RX) {
+        // send the received block to ring buffer
+        UBaseType_t res_send_rbuf =
+            xRingbufferSend(in_block_data_rbuf_handle, Lora_data.Data,
+                            sizeof(Lora_data.Data), pdMS_TO_TICKS(DELAY / 10));
+        if (res_send_rbuf != pdTRUE) {
+          ESP_LOGE(TAG, "Failed to send item");
+        }
+      }
+      // *********************** SENDING TO RING BUFFER ***********************
+      // *********************** SENDING TO RING BUFFER ***********************
+      // *********************** SENDING TO RING BUFFER ***********************
+
       ///// VISUALIZE
       ///**********************************************************
       ESP_LOGE(TAG,
@@ -973,15 +997,18 @@ static void uart_task(void *pvParameters) {
           // successfully sent the ack, and if the data we received is not a
           // duplicated message
           if (strncmp((const char *)is_duplicated_data, "N", 1) == 0) {
+            // if the following is 'true', it means we already have all the
+            // messages needed to conform the data from the sensor-node
+            if (amount_msg_needed == MSG_COUNTER_RX) {
+              xTaskNotifyGive(decode_rcv_blocked_data_task_handle);
+            }
+            //
             MSG_COUNTER_RX++;
             ESP_LOGW(TAG,
                      "***DEBUGGING*** Transaction ID of the next message (MUST "
                      "BE): <%u>)",
                      MSG_COUNTER_RX);
           }
-          ESP_LOGW(TAG,
-                   "***DEBUGGING*** Transaction ID of received message: <%u>)",
-                   MSG_COUNTER_RX);
         }
         ///// if the module answers +OK and we are sending data
         ///****************
@@ -1044,14 +1071,6 @@ static void uart_task(void *pvParameters) {
                 Lora_data.Data[strlen(Lora_data.Data)] = '\0';
                 ESP_LOGW(TAG, "***DEBUGGING*** Lora_data.Data: <%s>",
                          Lora_data.Data);
-
-                // send the received block to ring buffer
-                UBaseType_t res_send_rbuf = xRingbufferSend(
-                    in_block_data_rbuf_handle, Lora_data.Data,
-                    sizeof(Lora_data.Data), pdMS_TO_TICKS(DELAY / 10));
-                if (res_send_rbuf != pdTRUE) {
-                  ESP_LOGE(TAG, "Failed to send item\n");
-                }
                 break;
               case 4:
                 Lora_data.SignalStrength = token;
@@ -1169,6 +1188,8 @@ void app_main(void) {
       xRingbufferCreate(RINGBUFFER_SIZE, RINGBUFFER_TYPE);
   if (in_block_data_rbuf_handle == NULL) {
     ESP_LOGE(TAG, "Failed to create ring buffer\n");
+  } else {
+    ESP_LOGI(TAG, "Ring Buffer 'in_block_data_rbuf_handle' !!!CREATED!!!");
   }
 
   init_led();
