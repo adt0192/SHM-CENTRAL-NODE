@@ -131,6 +131,18 @@ static TaskHandle_t check_header_incoming_data_task_handle = NULL,
 frequency_t test_freq = F_125HZ;
 scale_t test_scale = SCALE_8G;
 
+// alternative to ring buffer
+char *in_block_data_buffer = NULL;
+
+// this is to keep tracking of the received block of data we already
+// pushed to 'in_block_data_buffer'
+uint8_t dayi = 0;
+
+// this is to know the size of the current and previous 'Lora_data.Data'
+// received
+uint8_t current_block_data_size = 0;
+uint8_t previous_block_data_size = 0;
+
 // amount of messages we need to receive to have a complete set of
 // samples from the sensor node
 uint8_t amount_msg_needed = 255; // initialize it with the max possible value
@@ -390,7 +402,12 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     // so from the ring buffer we must read
     // 'rcv_data_block_hex_characters' total bytes
     uint16_t rcv_data_block_hex_characters = ((total_bits_after_pad0 / 8) * 2);
-    rcv_data_block_hex = malloc((rcv_data_block_hex_characters + 1) *
+    ESP_LOGW(
+        TAG,
+        "***DEBUGGING*** Ring Buffer -> rcv_data_block_hex_characters: <%u>",
+        rcv_data_block_hex_characters);
+    // +4 because the header is 4 hex charaters
+    rcv_data_block_hex = malloc((rcv_data_block_hex_characters + 4 + 1) *
                                 sizeof(*rcv_data_block_hex));
     if (rcv_data_block_hex == NULL) {
       ESP_LOGE(TAG, "NOT ENOUGH HEAP");
@@ -398,24 +415,36 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
                "Failed to allocate *rcv_data_block_hex in transmit_data_task");
     }
     //
+    // reading from 'in_block_data_buffer'
+    for (size_t i = 0; i < amount_msg_needed; i++) {
+      strncpy(rcv_data_block_hex, in_block_data_buffer,
+              (rcv_data_block_hex_characters + 4) * i);
+      rcv_data_block_hex[rcv_data_block_hex_characters + 4] = '\0';
+      ESP_LOGW(TAG,
+               "***DEBUGGING*** extracted from 'in_block_data_buffer' -> "
+               "rcv_data_block_hex: <%s>",
+               rcv_data_block_hex);
+    }
+    //
     // receive data block from byte buffer *************************************
-    size_t item_size;
+    /* size_t item_size;
     rcv_data_block_hex = (char *)xRingbufferReceiveUpTo(
         in_block_data_rbuf_handle, &item_size, pdMS_TO_TICKS(1000),
         rcv_data_block_hex_characters);
     //
     // Check received data
     if (rcv_data_block_hex != NULL) {
-      rcv_data_block_hex[amount_zeros_pad] = '\0';
+      rcv_data_block_hex[rcv_data_block_hex_characters] = '\0';
       // Print rcv_data_block_hex
-      ESP_LOGI(TAG, "rcv_data_block_hex: <%s>", rcv_data_block_hex);
+      ESP_LOGW(TAG, "***DEBUGGING*** Ring Buffer -> rcv_data_block_hex: <%s>",
+               rcv_data_block_hex);
       // Return rcv_data_block_hex
       vRingbufferReturnItem(in_block_data_rbuf_handle,
                             (void *)rcv_data_block_hex);
     } else {
       // Failed to receive rcv_data_block_hex
       ESP_LOGE(TAG, "Failed to receive rcv_data_block_hex\n");
-    }
+    } */
     // receive data block from byte buffer *************************************
 
     // to store the extracted x, y, z sample from the received block of data
@@ -877,14 +906,23 @@ static void check_header_incoming_data_task(void *pvParameters) {
       // only if 'in_transaction_ID_dec == MSG_COUNTER_RX' it's true, it means
       // we didn't receive a dplicated message, so it's safe to send to ring
       // buffer
-      if (in_transaction_ID_dec == MSG_COUNTER_RX) {
+      //
+      if ((in_transaction_ID_dec == MSG_COUNTER_RX) && (in_msg_type == data)) {
+        ESP_LOGW(TAG, "***DEBUGGING*** 'previous_block_data_size': <%u>",
+                 previous_block_data_size);
+        strcpy(in_block_data_buffer + previous_block_data_size, Lora_data.Data);
+        previous_block_data_size += strlen(Lora_data.Data);
+        in_block_data_buffer[previous_block_data_size] = '\0';
+
         // send the received block to ring buffer
-        UBaseType_t res_send_rbuf =
+        /* UBaseType_t res_send_rbuf =
             xRingbufferSend(in_block_data_rbuf_handle, Lora_data.Data,
                             sizeof(Lora_data.Data), pdMS_TO_TICKS(DELAY / 10));
         if (res_send_rbuf != pdTRUE) {
           ESP_LOGE(TAG, "Failed to send item");
-        }
+        } else {
+          ESP_LOGI(TAG, "Item sent to ring buffer");
+        } */
       }
       // *********************** SENDING TO RING BUFFER ***********************
       // *********************** SENDING TO RING BUFFER ***********************
@@ -1000,6 +1038,7 @@ static void uart_task(void *pvParameters) {
             // if the following is 'true', it means we already have all the
             // messages needed to conform the data from the sensor-node
             if (amount_msg_needed == MSG_COUNTER_RX) {
+              previous_block_data_size = 0;
               xTaskNotifyGive(decode_rcv_blocked_data_task_handle);
             }
             //
@@ -1184,6 +1223,20 @@ void init_uart(void) {
 //********************************//
 ///////////////////////////////////////////////////////////////////////////////
 void app_main(void) {
+  // alternative to ring buffer
+  in_block_data_buffer =
+      malloc((RINGBUFFER_SIZE + 1) * sizeof(*in_block_data_buffer));
+  if (in_block_data_buffer == NULL) {
+    ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+    ESP_LOGE(TAG, "Failed to allocate *in_block_data_buffer");
+  } else {
+    ///// reset 'tmp_data_to_send_bin' to '0' **************************
+    memset(in_block_data_buffer, '0', RINGBUFFER_SIZE);
+    in_block_data_buffer[RINGBUFFER_SIZE] = '\0';
+    ///// reset 'tmp_data_to_send_bin' to '0' **************************
+  }
+
+  // ring buffer init
   in_block_data_rbuf_handle =
       xRingbufferCreate(RINGBUFFER_SIZE, RINGBUFFER_TYPE);
   if (in_block_data_rbuf_handle == NULL) {

@@ -21,6 +21,9 @@
         "random": "c",
         "regex": "c",
         "type_traits": "c",
-        "numerical_systems_conv.h": "c"
+        "numerical_systems_conv.h": "c",
+        "bitset": "c",
+        "chrono": "c",
+        "algorithm": "c"
     }
 }
