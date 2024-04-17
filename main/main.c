@@ -131,6 +131,17 @@ static TaskHandle_t check_header_incoming_data_task_handle = NULL,
 frequency_t test_freq = F_125HZ;
 scale_t test_scale = SCALE_8G;
 
+// amount of messages we need to receive to have a complete set of
+// samples from the sensor node
+uint8_t amount_msg_needed = 255; // initialize it with the max possible value
+
+// max number of 'xyz triplets' a block of data received has
+uint8_t max_xyx_triplets_to_send = 0;
+
+// (x_bits + y_bits + z_bits) indicates how many bits
+// an 'xyz triplet' has
+uint8_t xyz_bits = 0;
+
 // to store the 'ctrl' message received to work with it
 char *in_ctrl_msg = NULL;
 
@@ -171,28 +182,20 @@ uint16_t MSG_COUNTER_RX = 0; // counter to set the message transaction ID
 #define N 1024     // number of samples
 #define p (N / CR) // number of compressed samples
 
-// all next will store all samples taken (N rows and 3 columns)
-// 3 columns for each acceleration data
-// XDATA3-XDATA2-XDATA1
-// YDATA3-YDATA2-YDATA1
-// ZDATA3-ZDATA2-ZDATA1
-uint8_t **x_samples; // x measurements
-uint8_t **y_samples; // y measurements
-uint8_t **z_samples; // z measurements
-
-// all next will have all samples re-arranged,
-// and decoded (double type)
-double *x_samples_double; // x measurements
-double *y_samples_double; // y measurements
-double *z_samples_double; // z measurements
-
-// all next will have compressed measurement vector
+// all next will have compressed measurement received, converted to double
 double *x_samples_compressed; // x measurements
 double *y_samples_compressed; // y measurements
 double *z_samples_compressed; // z measurements
 
-// array of pointers for the binary representation of the position of a
-// sample in the new interval [0 ~ (max + |min|)]
+// array of pointers to store the extracted x, y, z sample from the received
+// block of data
+// it represents the binary of the position of a sample in
+// the new interval [0 ~ (max + |min|)]
+// +----+-------------+-------------+-------------+---+-------------+
+//  pad | xyz_bits_tx | xyz_bits_tx | xyz_bits_tx |...| xyz_bits_tx |
+// +----+-------------+-------------+-------------+---+-------------+
+// 0...0|  x - y - z  |  x - y - z  |  x - y - z  |...|  x - y - z  |
+// +----+-------------+-------------+-------------+---+-------------+
 char *x_samples_compressed_bin[p];
 char *y_samples_compressed_bin[p];
 char *z_samples_compressed_bin[p];
@@ -275,9 +278,68 @@ void init_led(void) {
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
+//*************************** INITIALIZE 2D ARRAYS **************************//
+//******************** ALL SAMPLES & COMPRESSED SAMPLES *********************//
+///////////////////////////////////////////////////////////////////////////////
+esp_err_t init_2d_arrays() {
+  // Note that arr[i][j] is same as *(*(arr+i)+j)
+  /* int o, count = 0;
+  for (i = 0; i < r; i++)
+    for (j = 0; j < c; j++)
+      arr[i][j] = ++count; */ // OR *(*(arr+i)+j) = ++count
+
+  /* for (i = 0; i < r; i++)
+    for (j = 0; j < c; j++)
+      printf("%d ", arr[i][j]); */
+
+  /* Code for further processing and free the
+     dynamically allocated memory */
+
+  //************************************************************************//
+
+  //************************************************************************//
+  // 2D arrays to hold COMPRESSED samples
+  x_samples_compressed = (double *)malloc(p * sizeof(double));
+  if (x_samples_compressed == NULL) {
+    ESP_LOGE(TAG, "*NOT ENOUGH HEAP* Failed to allocate *x_samples_compressed");
+    return ESP_FAIL;
+  }
+
+  y_samples_compressed = (double *)malloc(p * sizeof(double));
+  if (y_samples_compressed == NULL) {
+    ESP_LOGE(TAG, "*NOT ENOUGH HEAP* Failed to allocate *y_samples_compressed");
+    return ESP_FAIL;
+  }
+
+  z_samples_compressed = (double *)malloc(p * sizeof(double));
+  if (z_samples_compressed == NULL) {
+    ESP_LOGE(TAG, "*NOT ENOUGH HEAP* Failed to allocate *z_samples_compressed");
+    return ESP_FAIL;
+  }
+
+  ESP_LOGW(TAG, "*********************************************************");
+  ESP_LOGW(TAG, "After *_samples_compressed allocation");
+  ESP_LOGW(TAG, "Free heap memmory (bytes): <%lu>", xPortGetFreeHeapSize());
+  ESP_LOGW(TAG, "*********************************************************");
+  // 2D array to hold CMPRESSED samples
+  //************************************************************************//
+
+  return ESP_OK;
+}
+///////////////////////////////////////////////////////////////////////////////
+//*************************** INITIALIZE 2D ARRAYS **************************//
+//******************** ALL SAMPLES & COMPRESSED SAMPLES *********************//
+///////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////
 //******************* Decode the data received in blocks ********************//
 ///////////////////////////////////////////////////////////////////////////////
 static void decode_rcv_blocked_data_task(void *pvParameters) {
+  ///// to store the retrieved block of data from ring buffer
+  char *rcv_data_block_hex = NULL;
+
+  // to temporarily store the padded zeros at the start of each block
+  char *tmp_padded_zeros = NULL;
   while (1) {
     // Block to wait for data received (+RCV=) and check if ACK
     // Block indefinitely (without a timeout, so no need to check the function's
@@ -295,6 +357,101 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
      <%zu>", uxTaskGetStackHighWaterMark(NULL)); ESP_LOGE(TAG, "****************
      BYTES FREE IN TASK STACK ****************"); */
     // Print out remaining task stack memory (words) ************************
+
+    //
+    // |                    total_bits_tx_after_pad0                    |
+    // +----+-------------+-------------+-------------+---+-------------+
+    //  pad | xyz_bits_tx | xyz_bits_tx | xyz_bits_tx |...| xyz_bits_tx |
+    // +----+-------------+-------------+-------------+---+-------------+
+    // 0...0|  x - y - z  |  x - y - z  |  x - y - z  |...|  x - y - z  |
+    // +----+-------------+-------------+-------------+---+-------------+
+    // the above format is always multiple of 8,
+    // so it MAY BE paddded with '0'
+    // so we make:
+    uint16_t total_bits_after_pad0 =
+        (((xyz_bits * max_xyx_triplets_to_send) / 8) + 1) * 8;
+    //
+    // total zeros for padding so the message to is multiple of 8
+    uint16_t amount_zeros_pad =
+        total_bits_after_pad0 - (xyz_bits * max_xyx_triplets_to_send);
+
+    // we are receiving 'total_bits_after_pad0' bits in every block
+    // it means a total of (total_bits_after_pad0 / 8) 8-bit words
+    // each of those 8-bit words comes in converted to hexadecimal, which
+    // means it occupies 2 hexadecimal characters
+    // so we multiply the number (total_bits_after_pad0 / 8) by 2 to
+    // get how many hexadecimal characters the received block data has
+    //
+    // so from the ring buffer we must read
+    // 'rcv_data_block_hex_characters' total bytes
+    uint16_t rcv_data_block_hex_characters = ((total_bits_after_pad0 / 8) * 2);
+    rcv_data_block_hex = malloc((rcv_data_block_hex_characters + 1) *
+                                sizeof(*rcv_data_block_hex));
+    if (rcv_data_block_hex == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG,
+               "Failed to allocate *rcv_data_block_hex in transmit_data_task");
+    }
+    //
+    // receive data block from byte buffer *************************************
+    size_t item_size;
+    rcv_data_block_hex = (char *)xRingbufferReceiveUpTo(
+        in_block_data_rbuf_handle, &item_size, pdMS_TO_TICKS(1000),
+        rcv_data_block_hex_characters);
+    //
+    // Check received data
+    if (rcv_data_block_hex != NULL) {
+      rcv_data_block_hex[amount_zeros_pad] = '\0';
+      // Print rcv_data_block_hex
+      ESP_LOGI(TAG, "rcv_data_block_hex: <%s>", rcv_data_block_hex);
+      // Return rcv_data_block_hex
+      vRingbufferReturnItem(in_block_data_rbuf_handle,
+                            (void *)rcv_data_block_hex);
+    } else {
+      // Failed to receive rcv_data_block_hex
+      ESP_LOGE(TAG, "Failed to receive rcv_data_block_hex\n");
+    }
+    // receive data block from byte buffer *************************************
+
+    // to store the extracted x, y, z sample from the received block of data
+    // we will be pulling out of the ring buffer block by block
+    // to fill this array
+    for (int i = 0; i < p; ++i) {
+      x_samples_compressed_bin[i] = (char *)malloc((x_bits + 1) * sizeof(char));
+      if (x_samples_compressed_bin[i] == NULL) {
+        ESP_LOGE(TAG,
+                 "*NOT ENOUGH HEAP* Failed to allocate "
+                 "x_samples_compressed_bin[%d]",
+                 i);
+      }
+      //
+      y_samples_compressed_bin[i] = (char *)malloc((y_bits + 1) * sizeof(char));
+      if (y_samples_compressed_bin[i] == NULL) {
+        ESP_LOGE(TAG,
+                 "*NOT ENOUGH HEAP* Failed to allocate "
+                 "y_samples_compressed_bin[%d]",
+                 i);
+      }
+      //
+      z_samples_compressed_bin[i] = (char *)malloc((z_bits + 1) * sizeof(char));
+      if (z_samples_compressed_bin[i] == NULL) {
+        ESP_LOGE(TAG,
+                 "*NOT ENOUGH HEAP* Failed to allocate "
+                 "z_samples_compressed_bin[%d]",
+                 i);
+      }
+    }
+
+    // THIS DOESN'T BELONG TO THIS YET
+    // NOT FORGET ABOUT FREEING UP ALLOCATED MEMORY
+    // freeing up allocated memory **********************
+    for (int i = 0; i < p; i++) {
+      free(x_samples_compressed_bin[i]);
+      free(y_samples_compressed_bin[i]);
+      free(z_samples_compressed_bin[i]);
+    }
+    free(rcv_data_block_hex);
+    free(tmp_padded_zeros);
   }
 }
 ///////////////////////////////////////////////////////////////////////////////
@@ -378,6 +535,17 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
     GetSubString(in_ctrl_msg, 4, 2, z_bits_hex);
     z_bits = HexadecimalToDecimal(z_bits_hex);
     free(z_bits_hex);
+    //
+    // (x_bits + y_bits + z_bits) indicates how many bits
+    // an 'xyz triplet' has
+    xyz_bits = x_bits + y_bits + z_bits;
+    //
+    // max number of 'xyz triplets' a block of data received has
+    max_xyx_triplets_to_send = rylr998_payload_max_bits / xyz_bits;
+    //
+    // when we have already received this amount of data-type messages
+    // it means we already have all the info from the sensor-node
+    amount_msg_needed = (p / max_xyx_triplets_to_send) + 1;
     // working with the xyz amount of bits values ******************************
 
     // working with xyz min values *********************************************
@@ -806,9 +974,14 @@ static void uart_task(void *pvParameters) {
           // duplicated message
           if (strncmp((const char *)is_duplicated_data, "N", 1) == 0) {
             MSG_COUNTER_RX++;
+            ESP_LOGW(TAG,
+                     "***DEBUGGING*** Transaction ID of the next message (MUST "
+                     "BE): <%u>)",
+                     MSG_COUNTER_RX);
           }
-
-          ESP_LOGW(TAG, "***DEBUGGING*** MSG_COUNTER_RX: <%u>", MSG_COUNTER_RX);
+          ESP_LOGW(TAG,
+                   "***DEBUGGING*** Transaction ID of received message: <%u>)",
+                   MSG_COUNTER_RX);
         }
         ///// if the module answers +OK and we are sending data
         ///****************
@@ -1058,6 +1231,8 @@ void app_main(void) {
   init_rylr998_module();
   ESP_LOGI(TAG, "Waiting 50 ms");
   vTaskDelay(pdMS_TO_TICKS(50));
+
+  ESP_ERROR_CHECK(init_2d_arrays());
 
   ESP_LOGI(TAG, "******************************************************");
   ESP_LOGI(TAG, "****************** READY TO RECEIVE ******************");
