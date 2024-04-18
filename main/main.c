@@ -141,7 +141,7 @@ uint8_t dayi = 0;
 // this is to know the size of the current and previous 'Lora_data.Data'
 // received
 uint8_t current_block_data_size = 0;
-uint8_t previous_block_data_size = 0;
+uint16_t sum_previous_block_data_size = 0;
 
 // amount of messages we need to receive to have a complete set of
 // samples from the sensor node
@@ -450,7 +450,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     // to store the extracted x, y, z sample from the received block of data
     // we will be pulling out of the ring buffer block by block
     // to fill this array
-    for (int i = 0; i < p; ++i) {
+    /* for (int i = 0; i < p; ++i) {
       x_samples_compressed_bin[i] = (char *)malloc((x_bits + 1) * sizeof(char));
       if (x_samples_compressed_bin[i] == NULL) {
         ESP_LOGE(TAG,
@@ -474,18 +474,17 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
                  "z_samples_compressed_bin[%d]",
                  i);
       }
-    }
+    } */
 
     // THIS DOESN'T BELONG TO THIS YET
     // NOT FORGET ABOUT FREEING UP ALLOCATED MEMORY
     // freeing up allocated memory **********************
-    for (int i = 0; i < p; i++) {
+    /* for (int i = 0; i < p; i++) {
       free(x_samples_compressed_bin[i]);
       free(y_samples_compressed_bin[i]);
       free(z_samples_compressed_bin[i]);
-    }
+    } */
     free(rcv_data_block_hex);
-    free(tmp_padded_zeros);
   }
 }
 ///////////////////////////////////////////////////////////////////////////////
@@ -908,11 +907,14 @@ static void check_header_incoming_data_task(void *pvParameters) {
       // buffer
       //
       if ((in_transaction_ID_dec == MSG_COUNTER_RX) && (in_msg_type == data)) {
-        ESP_LOGW(TAG, "***DEBUGGING*** 'previous_block_data_size': <%u>",
-                 previous_block_data_size);
-        strcpy(in_block_data_buffer + previous_block_data_size, Lora_data.Data);
-        previous_block_data_size += strlen(Lora_data.Data);
-        in_block_data_buffer[previous_block_data_size] = '\0';
+        strcpy(in_block_data_buffer + sum_previous_block_data_size,
+               Lora_data.Data);
+        ESP_LOGW(TAG, "***DEBUGGING*** 'sum_previous_block_data_size': <%u>",
+                 sum_previous_block_data_size);
+        ESP_LOGW(TAG, "***DEBUGGING*** 'current_block_data_size: <%u>",
+                 current_block_data_size);
+        sum_previous_block_data_size += current_block_data_size;
+        in_block_data_buffer[sum_previous_block_data_size] = '\0';
 
         // send the received block to ring buffer
         /* UBaseType_t res_send_rbuf =
@@ -1038,7 +1040,7 @@ static void uart_task(void *pvParameters) {
             // if the following is 'true', it means we already have all the
             // messages needed to conform the data from the sensor-node
             if (amount_msg_needed == MSG_COUNTER_RX) {
-              previous_block_data_size = 0;
+              sum_previous_block_data_size = 0;
               xTaskNotifyGive(decode_rcv_blocked_data_task_handle);
             }
             //
@@ -1107,7 +1109,8 @@ static void uart_task(void *pvParameters) {
               case 3:
                 Lora_data.Data =
                     strdup(token); // strdup crea una copia de la cadena
-                Lora_data.Data[strlen(Lora_data.Data)] = '\0';
+                current_block_data_size = strlen(Lora_data.Data);
+                Lora_data.Data[current_block_data_size] = '\0';
                 ESP_LOGW(TAG, "***DEBUGGING*** Lora_data.Data: <%s>",
                          Lora_data.Data);
                 break;
