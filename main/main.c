@@ -895,8 +895,17 @@ static void check_header_incoming_data_task(void *pvParameters) {
     default:
       break;
     }
-    if (in_msg_type == ctrl) {
-      // 30 characters to hold from the 4th character on Lora_data.Data
+
+    // extract the transaction ID from the incoming header
+    uint16_t in_transaction_ID_dec = 0;
+    in_transaction_ID_dec = in_message_header_dec & 0x3FFF;
+    ESP_LOGW(TAG, "***DEBUGGING*** Transaction ID of incoming message: <%u>",
+             in_transaction_ID_dec);
+
+    // if the incoming message is 'ctrl' type, we extract the info in it:
+    // this is *xyz*_bits and min_*xyz*_value
+    if ((in_transaction_ID_dec == MSG_COUNTER_RX) && (in_msg_type == ctrl)) {
+      // 30 characters to hold from the 4th character onwards, on Lora_data.Data
       in_ctrl_msg = malloc((30 + 1) * sizeof(*header_hex_MSB));
       if (in_ctrl_msg == NULL) {
         ESP_LOGE(TAG, "NOT ENOUGH HEAP");
@@ -908,12 +917,6 @@ static void check_header_incoming_data_task(void *pvParameters) {
 
       xTaskNotifyGive(extract_info_from_ctrl_msg_task_handle);
     }
-
-    // extract the transaction ID from the incoming header
-    uint16_t in_transaction_ID_dec = 0;
-    in_transaction_ID_dec = in_message_header_dec & 0x3FFF;
-    ESP_LOGW(TAG, "***DEBUGGING*** Transaction ID of incoming message: <%u>",
-             in_transaction_ID_dec);
 
     // we only send ack if the transaction ID of the incoming data is equal to
     // the message ID we are expecting
@@ -941,12 +944,10 @@ static void check_header_incoming_data_task(void *pvParameters) {
                  "**********************************************************");
         ESP_LOGW(TAG, "***DEBUGGING*** 'sum_previous_block_data_size': <%u>",
                  sum_previous_block_data_size);
-        ESP_LOGW(TAG, "***DEBUGGING*** Lora_data.Data: <%s>", Lora_data.Data);
         ESP_LOGW(TAG, "***DEBUGGING*** 'current_block_data_size: <%u>",
                  current_block_data_size);
         sum_previous_block_data_size += current_block_data_size;
         data_in_buffer[sum_previous_block_data_size] = '\0';
-        ESP_LOGW(TAG, "***DEBUGGING*** data_in_buffer: <%s>", data_in_buffer);
         ESP_LOGE(TAG,
                  "**********************************************************");
 
