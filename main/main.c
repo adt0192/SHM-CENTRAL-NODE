@@ -132,14 +132,14 @@ frequency_t test_freq = F_125HZ;
 scale_t test_scale = SCALE_8G;
 
 // alternative to ring buffer
-char *in_block_data_buffer = NULL;
+char *data_in_buffer = NULL;
 
 // this is to keep tracking of the received block of data we already
-// pushed to 'in_block_data_buffer'
+// pushed to 'data_in_buffer'
 uint8_t dayi = 0;
 
-// this is to know the size of the current and previous 'Lora_data.Data'
-// received
+// this is to know the size of the current and sum of previous size of
+// 'Lora_data.Data' received
 uint8_t current_block_data_size = 0;
 uint16_t sum_previous_block_data_size = 0;
 
@@ -415,13 +415,13 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
                "Failed to allocate *rcv_data_block_hex in transmit_data_task");
     }
     //
-    // reading from 'in_block_data_buffer'
+    // reading from 'data_in_buffer'
     for (size_t i = 0; i < amount_msg_needed; i++) {
-      strncpy(rcv_data_block_hex, in_block_data_buffer,
+      strncpy(rcv_data_block_hex, data_in_buffer,
               (rcv_data_block_hex_characters + 4) * i);
       rcv_data_block_hex[rcv_data_block_hex_characters + 4] = '\0';
       ESP_LOGW(TAG,
-               "***DEBUGGING*** extracted from 'in_block_data_buffer' -> "
+               "***DEBUGGING*** extracted from 'data_in_buffer' -> "
                "rcv_data_block_hex: <%s>",
                rcv_data_block_hex);
     }
@@ -837,6 +837,11 @@ static void check_header_incoming_data_task(void *pvParameters) {
     // combine 'header_dec_MSB' and 'header_dec_LSB' into only one variable so
     // it's easy to compare the last 14 bits corresponding with the transaction
     // ID of the incoming message
+    //
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    // |header_dec_MSB |header_dec_LSB |
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    //
     uint16_t in_message_header_dec;
     in_message_header_dec = (header_dec_MSB << 8) & 0xFF00;
     in_message_header_dec |= header_dec_LSB;
@@ -907,14 +912,19 @@ static void check_header_incoming_data_task(void *pvParameters) {
       // buffer
       //
       if ((in_transaction_ID_dec == MSG_COUNTER_RX) && (in_msg_type == data)) {
-        strcpy(in_block_data_buffer + sum_previous_block_data_size,
-               Lora_data.Data);
+        strcpy(data_in_buffer + sum_previous_block_data_size, Lora_data.Data);
+        ESP_LOGE(TAG,
+                 "**********************************************************");
         ESP_LOGW(TAG, "***DEBUGGING*** 'sum_previous_block_data_size': <%u>",
                  sum_previous_block_data_size);
+        ESP_LOGW(TAG, "***DEBUGGING*** Lora_data.Data: <%s>", Lora_data.Data);
         ESP_LOGW(TAG, "***DEBUGGING*** 'current_block_data_size: <%u>",
                  current_block_data_size);
         sum_previous_block_data_size += current_block_data_size;
-        in_block_data_buffer[sum_previous_block_data_size] = '\0';
+        data_in_buffer[sum_previous_block_data_size] = '\0';
+        ESP_LOGW(TAG, "***DEBUGGING*** data_in_buffer: <%s>", data_in_buffer);
+        ESP_LOGE(TAG,
+                 "**********************************************************");
 
         // send the received block to ring buffer
         /* UBaseType_t res_send_rbuf =
@@ -1227,15 +1237,14 @@ void init_uart(void) {
 ///////////////////////////////////////////////////////////////////////////////
 void app_main(void) {
   // alternative to ring buffer
-  in_block_data_buffer =
-      malloc((RINGBUFFER_SIZE + 1) * sizeof(*in_block_data_buffer));
-  if (in_block_data_buffer == NULL) {
+  data_in_buffer = malloc((RINGBUFFER_SIZE + 1) * sizeof(*data_in_buffer));
+  if (data_in_buffer == NULL) {
     ESP_LOGE(TAG, "NOT ENOUGH HEAP");
-    ESP_LOGE(TAG, "Failed to allocate *in_block_data_buffer");
+    ESP_LOGE(TAG, "Failed to allocate *data_in_buffer");
   } else {
     ///// reset 'tmp_data_to_send_bin' to '0' **************************
-    memset(in_block_data_buffer, '0', RINGBUFFER_SIZE);
-    in_block_data_buffer[RINGBUFFER_SIZE] = '\0';
+    memset(data_in_buffer, '0', RINGBUFFER_SIZE);
+    data_in_buffer[RINGBUFFER_SIZE] = '\0';
     ///// reset 'tmp_data_to_send_bin' to '0' **************************
   }
 
