@@ -406,28 +406,49 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         TAG,
         "***DEBUGGING*** Ring Buffer -> rcv_data_block_hex_characters: <%u>",
         rcv_data_block_hex_characters);
+    //
+    // define block size
     // +4 because the header is 4 hex charaters
+    uint16_t block_size = rcv_data_block_hex_characters + 4;
+    //
     tmp_data_in_buffer_block_hex =
-        malloc((rcv_data_block_hex_characters + 4 + 1) *
-               sizeof(*tmp_data_in_buffer_block_hex));
+        malloc((block_size + 1) * sizeof(*tmp_data_in_buffer_block_hex));
     if (tmp_data_in_buffer_block_hex == NULL) {
       ESP_LOGE(TAG, "NOT ENOUGH HEAP");
       ESP_LOGE(TAG, "Failed to allocate *tmp_data_in_buffer_block_hex in "
                     "transmit_data_task");
     }
     //
-    // reading from 'data_in_buffer'
-    for (size_t i = 0; i < amount_msg_needed; i++) {
-      strncpy(tmp_data_in_buffer_block_hex, data_in_buffer,
-              (rcv_data_block_hex_characters + 4) * i);
-      tmp_data_in_buffer_block_hex[rcv_data_block_hex_characters + 4] = '\0';
+    // iterate over 'data_in_buffer' and extract the blocks
+    for (int i = 0; i < amount_msg_needed; i++) {
+      // calculate the starting index of the current block in data_in_buffer
+      int start_index = i * block_size;
+
+      // copy the actual block from data_in_buffer
+      // into tmp_data_in_buffer_block_hex
+      strncpy(tmp_data_in_buffer_block_hex, data_in_buffer + start_index,
+              block_size);
+
+      // add the ending null character to ensure a valid string
+      tmp_data_in_buffer_block_hex[block_size] = '\0';
+
       ESP_LOGW(TAG,
                "***DEBUGGING*** extracted from 'data_in_buffer(%zu)' -> "
                "tmp_data_in_buffer_block_hex: <%s>",
                i, tmp_data_in_buffer_block_hex);
+
+      // do the needed operations with the block
+      // ...
+      // ...
+      // ...
+
+      // go forward to the next block in tmp_data_in_buffer_block_hex
+      tmp_data_in_buffer_block_hex += block_size;
     }
     //
+    // *************************************************************************
     // receive data block from byte buffer *************************************
+    // *************************************************************************
     /* size_t item_size;
     tmp_data_in_buffer_block_hex = (char *)xRingbufferReceiveUpTo(
         in_block_data_rbuf_handle, &item_size, pdMS_TO_TICKS(1000),
@@ -446,7 +467,9 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       // Failed to receive tmp_data_in_buffer_block_hex
       ESP_LOGE(TAG, "Failed to receive tmp_data_in_buffer_block_hex\n");
     } */
+    // *************************************************************************
     // receive data block from byte buffer *************************************
+    // *************************************************************************
 
     // to store the extracted x, y, z sample from the received block of data
     // we will be pulling out of the ring buffer block by block
