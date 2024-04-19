@@ -354,8 +354,10 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
   // to binary
   char *tmp_data_in_buffer_block_bin = NULL;
 
-  // to temporarily store the padded zeros at the start of each block
-  char *tmp_padded_zeros = NULL;
+  // to temporarily store the x, y and z sample according to its amount of bits
+  char *tmp_x_sample = NULL; // this will have 'x_bits' bits
+  char *tmp_y_sample = NULL; // this will have 'y_bits' bits
+  char *tmp_z_sample = NULL; // this will have 'z_bits' bits
 
   // temporal value to store each 2-HEX characters segment
   char *tmp_segment_hex = NULL;
@@ -431,7 +433,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     uint16_t total_bits_after_pad0 =
         (((xyz_bits * max_xyx_triplets_to_send) / 8) + 1) * 8;
     //
-    // total zeros for padding so the message to is multiple of 8
+    // total zeros padded on the front of the message, so is multiple of 8
     uint16_t amount_zeros_pad =
         total_bits_after_pad0 - (xyz_bits * max_xyx_triplets_to_send);
 
@@ -491,6 +493,26 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     }
     //
 
+    // allocate space for teporarily store x, y and z sample
+    tmp_x_sample = malloc((x_bits + 1) * sizeof(*tmp_x_sample));
+    if (tmp_x_sample == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *tmp_x_sample in "
+                    "decode_rcv_blocked_data_task");
+    }
+    tmp_y_sample = malloc((y_bits + 1) * sizeof(*tmp_y_sample));
+    if (tmp_y_sample == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *tmp_y_sample in "
+                    "decode_rcv_blocked_data_task");
+    }
+    tmp_z_sample = malloc((z_bits + 1) * sizeof(*tmp_z_sample));
+    if (tmp_z_sample == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *tmp_z_sample in "
+                    "decode_rcv_blocked_data_task");
+    }
+
     // *************************************************************************
     // EXTRACT THE BLOCK OF INFO OUT FROM DATA_IN_BUFFER ***********************
     // *************************************************************************
@@ -538,10 +560,42 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         // copy next 2 HEX characters segment in the temporal variable
         strncpy(tmp_segment_hex,
                 tmp_data_in_buffer_block_hex + i * segment_size, segment_size);
+
+        // convert the current extracted hex segment to decimal, and next to
+        // binary
         tmp_segment_hex[segment_size] = '\0'; // add null-terminating character
         tmp_segment_dec = HexadecimalToDecimal(tmp_segment_hex);
         DecimalToBinary(tmp_segment_dec, tmp_segment_bin);
-        strncpy(tmp_data_in_buffer_block_bin);
+
+        // append every 'tmp_segment_bin' to 'tmp_data_in_buffer_block_bin'
+        strcpy(tmp_data_in_buffer_block_bin + (i * 8), tmp_segment_bin);
+      }
+      tmp_data_in_buffer_block_bin[total_bits_after_pad0] =
+          '\0'; // ensure null-termination
+
+      // after the previous 'for' loop ended, 'tmp_data_in_buffer_block_bin'
+      // will contain, after each iteration, the block of data from the sensor
+      // node, in binary format
+      //
+      // we start iterating from the next position after the padded zeros
+      // which is:
+      // 'total_bits_tx_after_pad0' - 'xyz_bits_tx *
+      // max_xyx_triplets_to_send' so we start from here:
+      // |                    total_bits_tx_after_pad0                    |
+      // +----+-------------+-------------+-------------+---+-------------+
+      //  pad | xyz_bits_tx | xyz_bits_tx | xyz_bits_tx |...| xyz_bits_tx |
+      // +----+-------------+-------------+-------------+---+-------------+
+      // 0...0|  x - y - z  |  x - y - z  |  x - y - z  |...|  x - y - z  |
+      // +----+-------------+-------------+-------------+---+-------------+
+      //      ^                                                           ^
+      // from | . . . . . . . . . . . . . . . . . . . . . . . . . . . to  |
+      // here | . . . . . . . . . . . . . . . . . . . . . . . . . . .here |
+      for (size_t i = amount_zeros_pad; i < total_bits_after_pad0;
+           (i += xyz_bits)) {
+        // x data
+        strncpy(tmp_x_sample, tmp_data_in_buffer_block_bin + i, x_bits);
+        tmp_x_sample[x_bits] = '\0'; // ensure null ending
+        //
       }
 
       // ...
