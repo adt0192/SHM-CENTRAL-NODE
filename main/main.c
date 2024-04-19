@@ -347,8 +347,8 @@ esp_err_t init_2d_arrays() {
 //******************* Decode the data received in blocks ********************//
 ///////////////////////////////////////////////////////////////////////////////
 static void decode_rcv_blocked_data_task(void *pvParameters) {
-  ///// to store the retrieved block of data from ring buffer
-  char *rcv_data_block_hex = NULL;
+  ///// to temporarily store the retrieved block of data from data_in_buffer
+  char *tmp_data_in_buffer_block_hex = NULL;
 
   // to temporarily store the padded zeros at the start of each block
   char *tmp_padded_zeros = NULL;
@@ -407,43 +407,44 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         "***DEBUGGING*** Ring Buffer -> rcv_data_block_hex_characters: <%u>",
         rcv_data_block_hex_characters);
     // +4 because the header is 4 hex charaters
-    rcv_data_block_hex = malloc((rcv_data_block_hex_characters + 4 + 1) *
-                                sizeof(*rcv_data_block_hex));
-    if (rcv_data_block_hex == NULL) {
+    tmp_data_in_buffer_block_hex =
+        malloc((rcv_data_block_hex_characters + 4 + 1) *
+               sizeof(*tmp_data_in_buffer_block_hex));
+    if (tmp_data_in_buffer_block_hex == NULL) {
       ESP_LOGE(TAG, "NOT ENOUGH HEAP");
-      ESP_LOGE(TAG,
-               "Failed to allocate *rcv_data_block_hex in transmit_data_task");
+      ESP_LOGE(TAG, "Failed to allocate *tmp_data_in_buffer_block_hex in "
+                    "transmit_data_task");
     }
     //
     // reading from 'data_in_buffer'
     for (size_t i = 0; i < amount_msg_needed; i++) {
-      strncpy(rcv_data_block_hex, data_in_buffer,
+      strncpy(tmp_data_in_buffer_block_hex, data_in_buffer,
               (rcv_data_block_hex_characters + 4) * i);
-      rcv_data_block_hex[rcv_data_block_hex_characters + 4] = '\0';
+      tmp_data_in_buffer_block_hex[rcv_data_block_hex_characters + 4] = '\0';
       ESP_LOGW(TAG,
-               "***DEBUGGING*** extracted from 'data_in_buffer' -> "
-               "rcv_data_block_hex: <%s>",
-               rcv_data_block_hex);
+               "***DEBUGGING*** extracted from 'data_in_buffer(%zu)' -> "
+               "tmp_data_in_buffer_block_hex: <%s>",
+               i, tmp_data_in_buffer_block_hex);
     }
     //
     // receive data block from byte buffer *************************************
     /* size_t item_size;
-    rcv_data_block_hex = (char *)xRingbufferReceiveUpTo(
+    tmp_data_in_buffer_block_hex = (char *)xRingbufferReceiveUpTo(
         in_block_data_rbuf_handle, &item_size, pdMS_TO_TICKS(1000),
         rcv_data_block_hex_characters);
     //
     // Check received data
-    if (rcv_data_block_hex != NULL) {
-      rcv_data_block_hex[rcv_data_block_hex_characters] = '\0';
-      // Print rcv_data_block_hex
-      ESP_LOGW(TAG, "***DEBUGGING*** Ring Buffer -> rcv_data_block_hex: <%s>",
-               rcv_data_block_hex);
-      // Return rcv_data_block_hex
+    if (tmp_data_in_buffer_block_hex != NULL) {
+      tmp_data_in_buffer_block_hex[rcv_data_block_hex_characters] = '\0';
+      // Print tmp_data_in_buffer_block_hex
+      ESP_LOGW(TAG, "***DEBUGGING*** Ring Buffer ->
+    tmp_data_in_buffer_block_hex: <%s>", tmp_data_in_buffer_block_hex);
+      // Return tmp_data_in_buffer_block_hex
       vRingbufferReturnItem(in_block_data_rbuf_handle,
-                            (void *)rcv_data_block_hex);
+                            (void *)tmp_data_in_buffer_block_hex);
     } else {
-      // Failed to receive rcv_data_block_hex
-      ESP_LOGE(TAG, "Failed to receive rcv_data_block_hex\n");
+      // Failed to receive tmp_data_in_buffer_block_hex
+      ESP_LOGE(TAG, "Failed to receive tmp_data_in_buffer_block_hex\n");
     } */
     // receive data block from byte buffer *************************************
 
@@ -484,7 +485,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       free(y_samples_compressed_bin[i]);
       free(z_samples_compressed_bin[i]);
     } */
-    free(rcv_data_block_hex);
+    free(tmp_data_in_buffer_block_hex);
   }
 }
 ///////////////////////////////////////////////////////////////////////////////
