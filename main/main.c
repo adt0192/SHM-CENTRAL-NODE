@@ -509,6 +509,10 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       free(z_samples_compressed_bin[i]);
     } */
     free(tmp_data_in_buffer_block_hex);
+
+    ESP_LOGE(TAG, "******************** <APP FINISHED> *********************");
+    ESP_LOGW(TAG, "!!!DEBUGGING!!! d_a: <%d>", d_a);
+    ESP_LOGE(TAG, "******************** <APP FINISHED> *********************");
   }
 }
 ///////////////////////////////////////////////////////////////////////////////
@@ -921,7 +925,7 @@ static void check_header_incoming_data_task(void *pvParameters) {
     // we only send ack if the transaction ID of the incoming data is equal to
     // the message ID we are expecting
     // the message ID we are expecting is MSG_COUNTER_RX
-
+    //
     // if in_transaction_ID_dec == MSG_COUNTER_RX
     // it means we correctly received the message we were expecting
     if ((in_transaction_ID_dec == MSG_COUNTER_RX) ||
