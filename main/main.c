@@ -347,14 +347,25 @@ esp_err_t init_2d_arrays() {
 //******************* Decode the data received in blocks ********************//
 ///////////////////////////////////////////////////////////////////////////////
 static void decode_rcv_blocked_data_task(void *pvParameters) {
-  ///// to temporarily store the retrieved block of data from data_in_buffer
+  // to temporarily store the retrieved block of data from data_in_buffer
   char *tmp_data_in_buffer_block_hex = NULL;
+
+  // to temporarily store the conversion of 'tmp_data_in_buffer_block_hex'
+  // to binary
+  char *tmp_data_in_buffer_block_bin = NULL;
 
   // to temporarily store the padded zeros at the start of each block
   char *tmp_padded_zeros = NULL;
 
-  // temporal vlaue to store each 2-HEX characters segment
+  // temporal value to store each 2-HEX characters segment
   char *tmp_segment_hex = NULL;
+
+  // temporal value to store each tmp_segment_hex converted to binary
+  char *tmp_segment_bin = NULL;
+
+  // to store the corresponding decimal value of the current 2-HEX characters
+  // segment
+  uint8_t tmp_segment_dec = 0;
   while (1) {
     // Block to wait for data received (+RCV=) and check if ACK
     // Block indefinitely (without a timeout, so no need to check the function's
@@ -448,19 +459,34 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     if (tmp_data_in_buffer_block_hex == NULL) {
       ESP_LOGE(TAG, "NOT ENOUGH HEAP");
       ESP_LOGE(TAG, "Failed to allocate *tmp_data_in_buffer_block_hex in "
-                    "transmit_data_task");
+                    "decode_rcv_blocked_data_task");
+    }
+
+    tmp_data_in_buffer_block_bin = malloc(
+        (total_bits_after_pad0 + 1) * sizeof(*tmp_data_in_buffer_block_bin));
+    if (tmp_data_in_buffer_block_bin == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *tmp_data_in_buffer_block_bin in "
+                    "decode_rcv_blocked_data_task");
     }
 
     //
     // segment size -> 2-HEX charactesr words
-    size_t segment_size = 2;
+    const size_t segment_size = 2;
     // calculate number of 8-bit words needed
-    size_t num_segments = rcv_data_block_hex_characters / segment_size;
+    const size_t num_segments = rcv_data_block_hex_characters / segment_size;
     //
     tmp_segment_hex = malloc((segment_size + 1) * sizeof(*tmp_segment_hex));
     if (tmp_segment_hex == NULL) {
       ESP_LOGE(TAG, "NOT ENOUGH HEAP");
       ESP_LOGE(TAG, "Failed to allocate *tmp_segment_hex in "
+                    "decode_rcv_blocked_data_task");
+    }
+    //
+    tmp_segment_bin = malloc((8 + 1) * sizeof(*tmp_segment_bin));
+    if (tmp_segment_bin == NULL) {
+      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+      ESP_LOGE(TAG, "Failed to allocate *tmp_segment_bin in "
                     "decode_rcv_blocked_data_task");
     }
     //
@@ -498,20 +524,24 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       // +------+---+-----------+-----------+-----------+---+-----------+
       // |0xFFFF|000| x - y - z | x - y - z | x - y - z |...| x - y - z |
       // +------+---+-----------+-----------+-----------+---+-----------+
+      // |------|         number of bits: total_bits_after_pad0         |
       //
-      // 80030060B60126C475B10D0C83206B74FE44BEB85A2EC589DB61A0A14416E52AC56A05
-      // E111D069C384105DFA6000000000000000000000A7D7744BBE29F1D304A62AD69BDAFF930
-      // C772C6F455F8121603A400EF1C6ED1770DA338E1DCB0975C7D2A9EEED4E69D333EBCFC295
-      // EDCAAE524EA7317CA8
+      // 8003-0060B60126C475B10D0C83206B74FE44BEB85A2EC589DB61A0A14416E52AC56A05
+      //      E111D069C384105DFA6000000000000000000000A7D7744BBE29F1D304A62AD69B
+      //      DAFF930C772C6F455F8121603A400EF1C6ED1770DA338E1DCB0975C7D2A9EEED4E
+      //      69D333EBCFC295EDCAAE524EA7317CA8
       // ...
       // the first 4 HEX characters in every 'tmp_data_in_buffer_block_hex' are
       // the header, we DON'T need it
       // we are gonna take every 2 HEX characters, and convert it to uint8_t
-      for (size_t i = 2; i < tmp_segment_hex; i++) {
+      for (size_t i = 2; i < num_segments; i++) {
         // copy next 2 HEX characters segment in the temporal variable
         strncpy(tmp_segment_hex,
                 tmp_data_in_buffer_block_hex + i * segment_size, segment_size);
         tmp_segment_hex[segment_size] = '\0'; // add null-terminating character
+        tmp_segment_dec = HexadecimalToDecimal(tmp_segment_hex);
+        DecimalToBinary(tmp_segment_dec, tmp_segment_bin);
+        strncpy(tmp_data_in_buffer_block_bin);
       }
 
       // ...
@@ -559,6 +589,9 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     }
 
     free(tmp_data_in_buffer_block_hex);
+    free(tmp_segment_hex);
+    free(tmp_segment_bin);
+    free(tmp_data_in_buffer_block_bin);
 
     ESP_LOGE(TAG, "******************** <APP FINISHED> *********************");
     ESP_LOGE(TAG, "******************** <APP FINISHED> *********************");

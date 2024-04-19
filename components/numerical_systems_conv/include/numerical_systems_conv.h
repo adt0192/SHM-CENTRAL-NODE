@@ -14,7 +14,7 @@ esp_err_t InsertString(char *str, int index, char *subStr, char *str_concat);
 
 int BinaryToDecimal(char *bin);
 
-esp_err_t DecimalToBinary(uint32_t decimal, uint32_t bits, char *binaryString);
+esp_err_t DecimalToBinary(uint8_t decimal, char *binaryString);
 
 esp_err_t DecimalToHexadecimal(int decimal, char *hexString);
 

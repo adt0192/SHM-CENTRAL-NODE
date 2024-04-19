@@ -108,7 +108,8 @@ int BinaryToDecimal(char *bin) {
 ///////////////////////////////////////////////////////////////////////////////
 //**************************** Decimal To Binary ****************************//
 ///////////////////////////////////////////////////////////////////////////////
-esp_err_t DecimalToBinary(uint32_t decimal, uint32_t bits, char *binaryString) {
+esp_err_t DecimalToBinary(uint8_t decimal, char *binaryString) {
+  uint8_t bits = 8;
   for (int i = bits - 1; i >= 0; i--) {
     binaryString[i] = (decimal % 2) + '0';
     decimal /= 2;
