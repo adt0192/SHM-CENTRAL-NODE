@@ -175,7 +175,7 @@ double max_x_value = 0; // max x initializing
 double min_y_value = 0; // min y initializing
 double max_y_value = 0; // max y initializing
 double min_z_value = 0; // min z initializing
-double max_z_value = 0; // max z initializin
+double max_z_value = 0; // max z initializing
 
 // to keep tracking of the sample we are pushing to
 // *xyz*_samples_compressed_bin
@@ -517,7 +517,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     // EXTRACT THE BLOCK OF INFO OUT FROM DATA_IN_BUFFER ***********************
     // *************************************************************************
     // iterate over 'data_in_buffer' and extract the blocks
-    for (int i = 0; i < amount_msg_needed; i++) {
+    for (size_t i = 0; i < amount_msg_needed; i++) {
       // calculate the starting index of the current block in data_in_buffer
       int start_index = i * block_size;
 
@@ -529,10 +529,10 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       // add the ending null character to ensure a valid string
       tmp_data_in_buffer_block_hex[block_size] = '\0';
 
-      ESP_LOGW(TAG,
-               "***DEBUGGING*** extracted from 'data_in_buffer(%zu)' -> "
-               "tmp_data_in_buffer_block_hex: <%s>",
-               i, tmp_data_in_buffer_block_hex);
+      ESP_LOGW(
+          TAG,
+          "***DEBUGGING*** extracted from 'data_in_buffer HEX (%zu)': <%s>", i,
+          tmp_data_in_buffer_block_hex);
 
       // ***********************************************************************
       // DECODIFICATION PROCESS ************************************************
@@ -548,6 +548,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       // +------+---+-----------+-----------+-----------+---+-----------+
       // |------|         number of bits: total_bits_after_pad0         |
       //
+      // e.g. bellow:
       // 8003-0060B60126C475B10D0C83206B74FE44BEB85A2EC589DB61A0A14416E52AC56A05
       //      E111D069C384105DFA6000000000000000000000A7D7744BBE29F1D304A62AD69B
       //      DAFF930C772C6F455F8121603A400EF1C6ED1770DA338E1DCB0975C7D2A9EEED4E
@@ -556,10 +557,13 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       // the first 4 HEX characters in every 'tmp_data_in_buffer_block_hex' are
       // the header, we DON'T need it
       // we are gonna take every 2 HEX characters, and convert it to uint8_t
-      for (size_t i = 2; i < num_segments; i++) {
+      //
+      // so in the ende of this following 'for' loop we will have the block of
+      // data converted to binary, so we can easily extract the info we need
+      for (size_t j = 2; j < num_segments; j++) {
         // copy next 2 HEX characters segment in the temporal variable
         strncpy(tmp_segment_hex,
-                tmp_data_in_buffer_block_hex + i * segment_size, segment_size);
+                tmp_data_in_buffer_block_hex + j * segment_size, segment_size);
 
         // convert the current extracted hex segment to decimal, and next to
         // binary
@@ -568,10 +572,15 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         DecimalToBinary(tmp_segment_dec, tmp_segment_bin);
 
         // append every 'tmp_segment_bin' to 'tmp_data_in_buffer_block_bin'
-        strcpy(tmp_data_in_buffer_block_bin + (i * 8), tmp_segment_bin);
+        strcpy(tmp_data_in_buffer_block_bin + (j * 8), tmp_segment_bin);
       }
       tmp_data_in_buffer_block_bin[total_bits_after_pad0] =
           '\0'; // ensure null-termination
+
+      ESP_LOGW(
+          TAG,
+          "***DEBUGGING*** extracted from 'data_in_buffer BIN (%zu)': <%s>", i,
+          tmp_data_in_buffer_block_bin);
 
       // after the previous 'for' loop ended, 'tmp_data_in_buffer_block_bin'
       // will contain, after each iteration, the block of data from the sensor
@@ -590,32 +599,40 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       //      ^                                                           ^
       // from | . . . . . . . . . . . . . . . . . . . . . . . . . . . to  |
       // here | . . . . . . . . . . . . . . . . . . . . . . . . . . .here |
-      for (size_t i = amount_zeros_pad; i < total_bits_after_pad0;
-           (i += xyz_bits)) {
+      ESP_LOGE(TAG,
+               "*********************************************************");
+      for (size_t k = amount_zeros_pad; k < total_bits_after_pad0;
+           (k += xyz_bits)) {
         // x data
-        strncpy(tmp_x_sample, tmp_data_in_buffer_block_bin + i, x_bits);
+        strncpy(tmp_x_sample, tmp_data_in_buffer_block_bin + k, x_bits);
         tmp_x_sample[x_bits] = '\0'; // ensure null ending
         x_samples_compressed_bin[d_a] = tmp_x_sample;
-        ESP_LOGW(TAG, "***DEBUGGING*** tmp_x_sample(%d)' -> <%s>", d_a,
-                 tmp_x_sample);
+        /* ESP_LOGW(TAG, "***DEBUGGING*** tmp_x_sample(%d)' -> <%s>", d_a,
+                 tmp_x_sample); */
         //
         // y data
-        strncpy(tmp_y_sample, tmp_data_in_buffer_block_bin + (i + x_bits),
+        strncpy(tmp_y_sample, tmp_data_in_buffer_block_bin + (k + x_bits),
                 y_bits);
         tmp_y_sample[y_bits] = '\0'; // ensure null ending
         y_samples_compressed_bin[d_a] = tmp_y_sample;
+        /* ESP_LOGW(TAG, "***DEBUGGING*** tmp_y_sample(%d)' -> <%s>", d_a,
+                 tmp_y_sample); */
         //
         // z data
         strncpy(tmp_z_sample,
-                tmp_data_in_buffer_block_bin + (i + x_bits + y_bits), z_bits);
+                tmp_data_in_buffer_block_bin + (k + x_bits + y_bits), z_bits);
         tmp_z_sample[z_bits] = '\0'; // ensure null ending
         z_samples_compressed_bin[d_a] = tmp_z_sample;
+        /* ESP_LOGW(TAG, "***DEBUGGING*** tmp_z_sample(%d)' -> <%s>", d_a,
+                 tmp_z_sample); */
         //
         d_a++;
         if (d_a == p) {
           break; // break from 'for' loop
         }
       }
+      ESP_LOGE(TAG,
+               "*********************************************************");
       // ...
       // ***********************************************************************
       // DECODIFICATION PROCESS ************************************************
