@@ -177,8 +177,8 @@ double max_y_value = 0; // max y initializing
 double min_z_value = 0; // min z initializing
 double max_z_value = 0; // max z initializin
 
-// to keep tracking of the sample we are extracting from
-// *_samples_compressed_bin that we are copying to total_bits_tx_after_pad0
+// to keep tracking of the sample we are pushing to
+// *xyz*_samples_compressed_bin
 int d_a = 0;
 
 // needed bits for each axis to transmit their respective samples
@@ -595,10 +595,27 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         // x data
         strncpy(tmp_x_sample, tmp_data_in_buffer_block_bin + i, x_bits);
         tmp_x_sample[x_bits] = '\0'; // ensure null ending
+        x_samples_compressed_bin[d_a] = tmp_x_sample;
+        ESP_LOGW(TAG, "***DEBUGGING*** tmp_x_sample(%d)' -> <%s>", d_a,
+                 tmp_x_sample);
         //
+        // y data
+        strncpy(tmp_y_sample, tmp_data_in_buffer_block_bin + (i + x_bits),
+                y_bits);
+        tmp_y_sample[y_bits] = '\0'; // ensure null ending
+        y_samples_compressed_bin[d_a] = tmp_y_sample;
+        //
+        // z data
+        strncpy(tmp_z_sample,
+                tmp_data_in_buffer_block_bin + (i + x_bits + y_bits), z_bits);
+        tmp_z_sample[z_bits] = '\0'; // ensure null ending
+        z_samples_compressed_bin[d_a] = tmp_z_sample;
+        //
+        d_a++;
+        if (d_a == p) {
+          break; // break from 'for' loop
+        }
       }
-
-      // ...
       // ...
       // ***********************************************************************
       // DECODIFICATION PROCESS ************************************************
