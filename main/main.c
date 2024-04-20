@@ -5,7 +5,7 @@
 // ** Project name:               SHM CENTRAL NODE
 // ** Created by:                 Andy Duarte Taño
 // ** Created:                    25/03/2024
-// ** Last modified:              17/04/2024
+// ** Last modified:              20/04/2024
 // ** Software:                   C/C++, ESP-IDF Framework, VS Code
 // ** Hardware:                   ESP32-Ethernet-Kit_A_V1.2
 //                                Reyax RYLR998 LoRa Module
@@ -471,7 +471,9 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       ESP_LOGE(TAG, "Failed to allocate *tmp_data_in_buffer_block_bin in "
                     "decode_rcv_blocked_data_task");
     }
-    tmp_data_in_buffer_block_bin[0] = '\0';
+    // tmp_data_in_buffer_block_bin[0] = '\0';
+    memset(tmp_data_in_buffer_block_bin, '0', total_bits_after_pad0);
+    tmp_data_in_buffer_block_bin[total_bits_after_pad0] = '\0';
 
     //
     // segment size -> 2-HEX charactesr words
@@ -641,7 +643,8 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       // ***********************************************************************
       // DECODIFICATION PROCESS ************************************************
       // ***********************************************************************
-      tmp_data_in_buffer_block_bin[0] = '\0';
+      memset(tmp_data_in_buffer_block_bin, '0', total_bits_after_pad0);
+      tmp_data_in_buffer_block_bin[total_bits_after_pad0] = '\0';
     }
     // *************************************************************************
     // EXTRACT THE BLOCK OF INFO OUT FROM DATA_IN_BUFFER ***********************
