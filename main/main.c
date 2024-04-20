@@ -471,12 +471,16 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       ESP_LOGE(TAG, "Failed to allocate *tmp_data_in_buffer_block_bin in "
                     "decode_rcv_blocked_data_task");
     }
+    tmp_data_in_buffer_block_bin[0] = '\0';
 
     //
     // segment size -> 2-HEX charactesr words
     const size_t segment_size = 2;
-    // calculate number of 8-bit words needed
-    const size_t num_segments = rcv_data_block_hex_characters / segment_size;
+    // calculate number of 2 HEX words needed
+    // +2 because of the HEADER (it takes two segments of 2 HEX characters, 4
+    // HEX characters)
+    const size_t num_segments =
+        rcv_data_block_hex_characters / segment_size + 2;
     //
     tmp_segment_hex = malloc((segment_size + 1) * sizeof(*tmp_segment_hex));
     if (tmp_segment_hex == NULL) {
@@ -556,18 +560,18 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       // ...
       // the first 4 HEX characters in every 'tmp_data_in_buffer_block_hex' are
       // the header, we DON'T need it
-      // we are gonna take every 2 HEX characters, and convert it to uint8_t
+      // we are gonna take every 2 HEX characters, and convert it to binary
       //
-      // so in the ende of this following 'for' loop we will have the block of
+      // so in the end of this following 'for' loop we will have the block of
       // data converted to binary, so we can easily extract the info we need
       for (size_t j = 2; j < num_segments; j++) {
         // copy next 2 HEX characters segment in the temporal variable
         strncpy(tmp_segment_hex,
                 tmp_data_in_buffer_block_hex + j * segment_size, segment_size);
+        tmp_segment_hex[segment_size] = '\0'; // null-end character
 
         // convert the current extracted hex segment to decimal, and next to
         // binary
-        tmp_segment_hex[segment_size] = '\0'; // add null-terminating character
         tmp_segment_dec = HexadecimalToDecimal(tmp_segment_hex);
         DecimalToBinary(tmp_segment_dec, tmp_segment_bin);
 
@@ -637,6 +641,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       // ***********************************************************************
       // DECODIFICATION PROCESS ************************************************
       // ***********************************************************************
+      tmp_data_in_buffer_block_bin[0] = '\0';
     }
     // *************************************************************************
     // EXTRACT THE BLOCK OF INFO OUT FROM DATA_IN_BUFFER ***********************

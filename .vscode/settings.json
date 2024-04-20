@@ -24,6 +24,7 @@
         "numerical_systems_conv.h": "c",
         "bitset": "c",
         "chrono": "c",
-        "algorithm": "c"
+        "algorithm": "c",
+        "rylr998.h": "c"
     }
 }
