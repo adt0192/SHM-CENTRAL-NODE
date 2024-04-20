@@ -456,26 +456,6 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     // +4 because the header is 4 HEX charaters
     uint16_t block_size = rcv_data_block_hex_characters + 4;
 
-    tmp_data_in_buffer_block_hex =
-        malloc((block_size + 1) * sizeof(*tmp_data_in_buffer_block_hex));
-    if (tmp_data_in_buffer_block_hex == NULL) {
-      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
-      ESP_LOGE(TAG, "Failed to allocate *tmp_data_in_buffer_block_hex in "
-                    "decode_rcv_blocked_data_task");
-    }
-
-    tmp_data_in_buffer_block_bin = malloc(
-        (total_bits_after_pad0 + 1) * sizeof(*tmp_data_in_buffer_block_bin));
-    if (tmp_data_in_buffer_block_bin == NULL) {
-      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
-      ESP_LOGE(TAG, "Failed to allocate *tmp_data_in_buffer_block_bin in "
-                    "decode_rcv_blocked_data_task");
-    }
-    // tmp_data_in_buffer_block_bin[0] = '\0';
-    memset(tmp_data_in_buffer_block_bin, '0', total_bits_after_pad0);
-    tmp_data_in_buffer_block_bin[total_bits_after_pad0] = '\0';
-
-    //
     // segment size -> 2-HEX charactesr words
     const size_t segment_size = 2;
     // calculate number of 2 HEX words needed
@@ -483,13 +463,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     // HEX characters)
     const size_t num_segments =
         rcv_data_block_hex_characters / segment_size + 2;
-    //
-    tmp_segment_hex = malloc((segment_size + 1) * sizeof(*tmp_segment_hex));
-    if (tmp_segment_hex == NULL) {
-      ESP_LOGE(TAG, "NOT ENOUGH HEAP");
-      ESP_LOGE(TAG, "Failed to allocate *tmp_segment_hex in "
-                    "decode_rcv_blocked_data_task");
-    }
+
     //
     tmp_segment_bin = malloc((8 + 1) * sizeof(*tmp_segment_bin));
     if (tmp_segment_bin == NULL) {
@@ -526,6 +500,14 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     for (size_t i = 0; i < amount_msg_needed; i++) {
       // calculate the starting index of the current block in data_in_buffer
       int start_index = i * block_size;
+
+      tmp_data_in_buffer_block_hex =
+          malloc((block_size + 1) * sizeof(*tmp_data_in_buffer_block_hex));
+      if (tmp_data_in_buffer_block_hex == NULL) {
+        ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+        ESP_LOGE(TAG, "Failed to allocate *tmp_data_in_buffer_block_hex in "
+                      "decode_rcv_blocked_data_task");
+      }
 
       // copy the actual block from data_in_buffer
       // into tmp_data_in_buffer_block_hex
@@ -566,6 +548,23 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       //
       // so in the end of this following 'for' loop we will have the block of
       // data converted to binary, so we can easily extract the info we need
+      tmp_data_in_buffer_block_bin = malloc(
+          (total_bits_after_pad0 + 1) * sizeof(*tmp_data_in_buffer_block_bin));
+      if (tmp_data_in_buffer_block_bin == NULL) {
+        ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+        ESP_LOGE(TAG, "Failed to allocate *tmp_data_in_buffer_block_bin in "
+                      "decode_rcv_blocked_data_task");
+      }
+      memset(tmp_data_in_buffer_block_bin, '0', total_bits_after_pad0);
+      tmp_data_in_buffer_block_bin[total_bits_after_pad0] = '\0';
+      //
+      tmp_segment_hex = malloc((segment_size + 1) * sizeof(*tmp_segment_hex));
+      if (tmp_segment_hex == NULL) {
+        ESP_LOGE(TAG, "NOT ENOUGH HEAP");
+        ESP_LOGE(TAG, "Failed to allocate *tmp_segment_hex in "
+                      "decode_rcv_blocked_data_task");
+      }
+      //
       for (size_t j = 2; j < num_segments; j++) {
         // copy next 2 HEX characters segment in the temporal variable
         strncpy(tmp_segment_hex,
@@ -580,6 +579,10 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         // append every 'tmp_segment_bin' to 'tmp_data_in_buffer_block_bin'
         strcpy(tmp_data_in_buffer_block_bin + (j * 8), tmp_segment_bin);
       }
+      free(tmp_data_in_buffer_block_hex);
+      free(tmp_segment_hex);
+      free(tmp_segment_bin);
+
       tmp_data_in_buffer_block_bin[total_bits_after_pad0] =
           '\0'; // ensure null-termination
 
@@ -613,24 +616,24 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         strncpy(tmp_x_sample, tmp_data_in_buffer_block_bin + k, x_bits);
         tmp_x_sample[x_bits] = '\0'; // ensure null ending
         x_samples_compressed_bin[d_a] = tmp_x_sample;
-        /* ESP_LOGW(TAG, "***DEBUGGING*** tmp_x_sample(%d)' -> <%s>", d_a,
-                 tmp_x_sample); */
+        ESP_LOGW(TAG, "***DEBUGGING*** tmp_x_sample(%d)' -> <%s>", d_a,
+                 tmp_x_sample);
         //
         // y data
         strncpy(tmp_y_sample, tmp_data_in_buffer_block_bin + (k + x_bits),
                 y_bits);
         tmp_y_sample[y_bits] = '\0'; // ensure null ending
         y_samples_compressed_bin[d_a] = tmp_y_sample;
-        /* ESP_LOGW(TAG, "***DEBUGGING*** tmp_y_sample(%d)' -> <%s>", d_a,
-                 tmp_y_sample); */
+        ESP_LOGW(TAG, "***DEBUGGING*** tmp_y_sample(%d)' -> <%s>", d_a,
+                 tmp_y_sample);
         //
         // z data
         strncpy(tmp_z_sample,
                 tmp_data_in_buffer_block_bin + (k + x_bits + y_bits), z_bits);
         tmp_z_sample[z_bits] = '\0'; // ensure null ending
         z_samples_compressed_bin[d_a] = tmp_z_sample;
-        /* ESP_LOGW(TAG, "***DEBUGGING*** tmp_z_sample(%d)' -> <%s>", d_a,
-                 tmp_z_sample); */
+        ESP_LOGW(TAG, "***DEBUGGING*** tmp_z_sample(%d)' -> <%s>", d_a,
+                 tmp_z_sample);
         //
         d_a++;
         if (d_a == p) {
@@ -639,12 +642,16 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       }
       ESP_LOGE(TAG,
                "*********************************************************");
+
+      free(tmp_data_in_buffer_block_bin);
+
+      free(tmp_x_sample);
+      free(tmp_y_sample);
+      free(tmp_z_sample);
       // ...
       // ***********************************************************************
       // DECODIFICATION PROCESS ************************************************
       // ***********************************************************************
-      memset(tmp_data_in_buffer_block_bin, '0', total_bits_after_pad0);
-      tmp_data_in_buffer_block_bin[total_bits_after_pad0] = '\0';
     }
     // *************************************************************************
     // EXTRACT THE BLOCK OF INFO OUT FROM DATA_IN_BUFFER ***********************
@@ -683,11 +690,6 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       free(y_samples_compressed_bin[i]);
       free(z_samples_compressed_bin[i]);
     }
-
-    free(tmp_data_in_buffer_block_hex);
-    free(tmp_segment_hex);
-    free(tmp_segment_bin);
-    free(tmp_data_in_buffer_block_bin);
 
     ESP_LOGE(TAG, "******************** <APP FINISHED> *********************");
     ESP_LOGE(TAG, "******************** <APP FINISHED> *********************");
