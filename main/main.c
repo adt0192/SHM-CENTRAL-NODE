@@ -611,6 +611,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       //      ^                                                           ^
       // from | . . . . . . . . . . . . . . . . . . . . . . . . . . . to  |
       // here | . . . . . . . . . . . . . . . . . . . . . . . . . . .here |
+      //
       ESP_LOGE(TAG,
                "*********************************************************");
       for (size_t k = amount_zeros_pad; k < total_bits_after_pad0;
@@ -646,15 +647,6 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       ESP_LOGE(TAG,
                "*********************************************************");
 
-      ESP_LOGW(TAG,
-               "***DEBUGGING*** BEFORE free(tmp_data_in_buffer_block_bin)");
-      free(tmp_data_in_buffer_block_bin);
-
-      ESP_LOGW(TAG, "***DEBUGGING*** BEFORE free(tmp_*xyz_*sample)");
-      free(tmp_x_sample);
-      free(tmp_y_sample);
-      free(tmp_z_sample);
-      ESP_LOGW(TAG, "***DEBUGGING*** AFTER free(tmp_*xyz_*sample)");
       // ...
       // ***********************************************************************
       // DECODIFICATION PROCESS ************************************************
@@ -691,16 +683,33 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
 
     // THIS DOESN'T BELONG TO THIS YET
     // NOT FORGET ABOUT FREEING UP ALLOCATED MEMORY
-    // freeing up allocated memory **********************
+    // FREEING UP ALLOCATED MEMORY *********************************************
+    // FREEING UP ALLOCATED MEMORY *********************************************
+    // FREEING UP ALLOCATED MEMORY *********************************************
+    ESP_LOGW(TAG, "***DEBUGGING*** BEFORE free(xyz_samples_compressed_bin[i])");
     for (int i = 0; i < p; i++) {
       free(x_samples_compressed_bin[i]);
       free(y_samples_compressed_bin[i]);
       free(z_samples_compressed_bin[i]);
     }
 
+    ESP_LOGW(TAG, "***DEBUGGING*** BEFORE free(tmp_data_in_buffer_block_bin)");
     free(tmp_data_in_buffer_block_hex);
+    free(tmp_data_in_buffer_block_bin);
+
+    ESP_LOGW(
+        TAG,
+        "***DEBUGGING*** BEFORE free(tmp_segment_hex) & free(tmp_segment_bin)");
     free(tmp_segment_hex);
     free(tmp_segment_bin);
+
+    ESP_LOGW(TAG, "***DEBUGGING*** BEFORE free(tmp_*xyz_*sample)");
+    free(tmp_x_sample);
+    free(tmp_y_sample);
+    free(tmp_z_sample);
+    // FREEING UP ALLOCATED MEMORY *********************************************
+    // FREEING UP ALLOCATED MEMORY *********************************************
+    // FREEING UP ALLOCATED MEMORY *********************************************
 
     ESP_LOGE(TAG, "******************** <APP FINISHED> *********************");
     ESP_LOGE(TAG, "******************** <APP FINISHED> *********************");
