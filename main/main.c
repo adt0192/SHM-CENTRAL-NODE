@@ -277,6 +277,31 @@ double accel_res(scale_t scale) {
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
+//****************** ROUND UP TO A NUMBER OF DECIMAL PLACES *****************//
+///////////////////////////////////////////////////////////////////////////////
+double round_to_decimal(double num, scale_t scale) {
+  int decimal_places = 0;
+  switch (scale) {
+  case SCALE_2G:
+    decimal_places = 11;
+    break;
+  case SCALE_4G:
+    decimal_places = 10;
+    break;
+  case SCALE_8G:
+    decimal_places = 9;
+    break;
+  default:
+    break;
+  }
+  double multiplier = pow(10, decimal_places);
+  return round(num * multiplier) / multiplier;
+}
+///////////////////////////////////////////////////////////////////////////////
+//****************** ROUND UP TO A NUMBER OF DECIMAL PLACES *****************//
+///////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////
 //************************** Initialization of LED  *************************//
 ///////////////////////////////////////////////////////////////////////////////
 void init_led(void) {
@@ -935,9 +960,9 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
     free(in_ctrl_msg);
 
     resolution = accel_res(test_scale);
-    min_x_value = min_x_value_int32 * resolution;
-    min_y_value = min_y_value_int32 * resolution;
-    min_z_value = min_z_value_int32 * resolution;
+    min_x_value = round_to_decimal(min_x_value_int32 * resolution, test_scale);
+    min_y_value = round_to_decimal(min_y_value_int32 * resolution, test_scale);
+    min_z_value = round_to_decimal(min_z_value_int32 * resolution, test_scale);
     ESP_LOGE(TAG, "********************** MIN VALUES **********************");
     ESP_LOGI(TAG, "min_x_value= <%.15f>", min_x_value);
     ESP_LOGI(TAG, "min_y_value= <%.15f>", min_y_value);
