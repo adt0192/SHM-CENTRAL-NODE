@@ -628,7 +628,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         // x data
         strncpy(tmp_x_sample, tmp_data_in_buffer_block_bin + k, x_bits);
         tmp_x_sample[x_bits] = NULL_END; // ensure null ending
-        x_samples_compressed_bin[d_a] = tmp_x_sample;
+        strcpy(x_samples_compressed_bin[d_a], tmp_x_sample);
         ESP_LOGW(TAG, "***DEBUGGING*** tmp_x_sample(%d)' -> <%s>", d_a,
                  tmp_x_sample);
         //
@@ -636,7 +636,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         strncpy(tmp_y_sample, tmp_data_in_buffer_block_bin + (k + x_bits),
                 y_bits);
         tmp_y_sample[y_bits] = NULL_END; // ensure null ending
-        y_samples_compressed_bin[d_a] = tmp_y_sample;
+        strcpy(y_samples_compressed_bin[d_a], tmp_y_sample);
         ESP_LOGW(TAG, "***DEBUGGING*** tmp_y_sample(%d)' -> <%s>", d_a,
                  tmp_y_sample);
         //
@@ -644,7 +644,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         strncpy(tmp_z_sample,
                 tmp_data_in_buffer_block_bin + (k + x_bits + y_bits), z_bits);
         tmp_z_sample[z_bits] = NULL_END; // ensure null ending
-        z_samples_compressed_bin[d_a] = tmp_z_sample;
+        strcpy(z_samples_compressed_bin[d_a], tmp_z_sample);
         ESP_LOGW(TAG, "***DEBUGGING*** tmp_z_sample(%d)' -> <%s>", d_a,
                  tmp_z_sample);
         //
@@ -719,6 +719,15 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     // FREEING UP ALLOCATED MEMORY *********************************************
     // FREEING UP ALLOCATED MEMORY *********************************************
     // FREEING UP ALLOCATED MEMORY *********************************************
+
+    ESP_LOGE(TAG, "********************** MIN VALUES **********************");
+    ESP_LOGI(TAG, "min_x_value= <%.15f>", min_x_value);
+    ESP_LOGI(TAG, "min_y_value= <%.15f>", min_y_value);
+    ESP_LOGI(TAG, "min_z_value= <%.15f>", min_z_value);
+    ESP_LOGI(TAG, "x_bits= <%u>", x_bits);
+    ESP_LOGI(TAG, "y_bits= <%u>", y_bits);
+    ESP_LOGI(TAG, "z_bits= <%u>", z_bits);
+    ESP_LOGE(TAG, "********************** MIN VALUES **********************");
 
     ESP_LOGE(TAG, "******************** <APP FINISHED> *********************");
     ESP_LOGE(TAG, "******************** <APP FINISHED> *********************");
