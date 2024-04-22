@@ -54,6 +54,8 @@
 //************************************+ +************************************//
 //***************************************************************************//
 
+#define NULL_END ((char){'\0'})
+
 #define LED_PIN GPIO_NUM_2
 
 // spi accelerometer interface
@@ -388,7 +390,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     // to store the extracted x, y, z sample from the received block of data
     // we will be pulling out of the ring buffer block by block
     // to fill this array
-    for (int i = 0; i < p; ++i) {
+    for (size_t i = 0; i < p; ++i) {
       x_samples_compressed_bin[i] = (char *)malloc((x_bits + 1) * sizeof(char));
       if (x_samples_compressed_bin[i] == NULL) {
         ESP_LOGE(TAG,
@@ -494,7 +496,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
                     "decode_rcv_blocked_data_task");
     } else {
       memset(tmp_data_in_buffer_block_hex, '0', hex_block_size);
-      tmp_data_in_buffer_block_hex[hex_block_size] = '\0';
+      tmp_data_in_buffer_block_hex[hex_block_size] = NULL_END;
     }
 
     tmp_data_in_buffer_block_bin = malloc(
@@ -505,7 +507,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
                     "decode_rcv_blocked_data_task");
     } else {
       memset(tmp_data_in_buffer_block_bin, '0', total_bits_after_pad0);
-      tmp_data_in_buffer_block_bin[total_bits_after_pad0] = '\0';
+      tmp_data_in_buffer_block_bin[total_bits_after_pad0] = NULL_END;
     }
 
     tmp_segment_hex = malloc((segment_size_hex + 1) * sizeof(*tmp_segment_hex));
@@ -537,7 +539,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
               hex_block_size);
 
       // add the ending null character to ensure a valid string
-      tmp_data_in_buffer_block_hex[hex_block_size] = '\0';
+      tmp_data_in_buffer_block_hex[hex_block_size] = NULL_END;
 
       ESP_LOGW(
           TAG,
@@ -576,7 +578,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         strncpy(tmp_segment_hex,
                 tmp_data_in_buffer_block_hex + j * segment_size_hex,
                 segment_size_hex);
-        tmp_segment_hex[segment_size_hex] = '\0'; // null-end character
+        tmp_segment_hex[segment_size_hex] = NULL_END; // null-end character
 
         // convert the current extracted hex segment to decimal, and next to
         // binary
@@ -594,7 +596,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
       }
 
       tmp_data_in_buffer_block_bin[total_bits_after_pad0] =
-          '\0'; // ensure null-termination
+          NULL_END; // ensure null-termination
 
       ESP_LOGW(
           TAG,
@@ -625,7 +627,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
            (k += xyz_bits)) {
         // x data
         strncpy(tmp_x_sample, tmp_data_in_buffer_block_bin + k, x_bits);
-        tmp_x_sample[x_bits] = '\0'; // ensure null ending
+        tmp_x_sample[x_bits] = NULL_END; // ensure null ending
         x_samples_compressed_bin[d_a] = tmp_x_sample;
         ESP_LOGW(TAG, "***DEBUGGING*** tmp_x_sample(%d)' -> <%s>", d_a,
                  tmp_x_sample);
@@ -633,7 +635,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         // y data
         strncpy(tmp_y_sample, tmp_data_in_buffer_block_bin + (k + x_bits),
                 y_bits);
-        tmp_y_sample[y_bits] = '\0'; // ensure null ending
+        tmp_y_sample[y_bits] = NULL_END; // ensure null ending
         y_samples_compressed_bin[d_a] = tmp_y_sample;
         ESP_LOGW(TAG, "***DEBUGGING*** tmp_y_sample(%d)' -> <%s>", d_a,
                  tmp_y_sample);
@@ -641,7 +643,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         // z data
         strncpy(tmp_z_sample,
                 tmp_data_in_buffer_block_bin + (k + x_bits + y_bits), z_bits);
-        tmp_z_sample[z_bits] = '\0'; // ensure null ending
+        tmp_z_sample[z_bits] = NULL_END; // ensure null ending
         z_samples_compressed_bin[d_a] = tmp_z_sample;
         ESP_LOGW(TAG, "***DEBUGGING*** tmp_z_sample(%d)' -> <%s>", d_a,
                  tmp_z_sample);
@@ -673,7 +675,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     //
     // Check received data
     if (tmp_data_in_buffer_block_hex != NULL) {
-      tmp_data_in_buffer_block_hex[rcv_data_block_hex_characters] = '\0';
+      tmp_data_in_buffer_block_hex[rcv_data_block_hex_characters] = NULL_END;
       // Print tmp_data_in_buffer_block_hex
       ESP_LOGW(TAG, "***DEBUGGING*** Ring Buffer ->
     tmp_data_in_buffer_block_hex: <%s>", tmp_data_in_buffer_block_hex);
@@ -1158,7 +1160,7 @@ static void check_header_incoming_data_task(void *pvParameters) {
         ESP_LOGW(TAG, "***DEBUGGING*** 'current_block_data_size: <%u>",
                  current_block_data_size);
         sum_previous_block_data_size += current_block_data_size;
-        data_in_buffer[sum_previous_block_data_size] = '\0';
+        data_in_buffer[sum_previous_block_data_size] = NULL_END;
         ESP_LOGE(TAG,
                  "**********************************************************");
 
@@ -1330,7 +1332,7 @@ static void uart_task(void *pvParameters) {
           // info, so we need to wait until we have the full block so the
           // programm won't enter this section
           if (event.size != 120) {
-            full_in_uart_data[data_received_count] = '\0';
+            full_in_uart_data[data_received_count] = NULL_END;
 
             ESP_LOGW(TAG, "***DEBUGGING*** full_in_uart_data: %s",
                      full_in_uart_data);
@@ -1356,7 +1358,7 @@ static void uart_task(void *pvParameters) {
                 Lora_data.Data =
                     strdup(token); // strdup crea una copia de la cadena
                 current_block_data_size = strlen(Lora_data.Data);
-                Lora_data.Data[current_block_data_size] = '\0';
+                Lora_data.Data[current_block_data_size] = NULL_END;
                 ESP_LOGW(TAG, "***DEBUGGING*** Lora_data.Data: <%s>",
                          Lora_data.Data);
                 break;
@@ -1480,7 +1482,7 @@ void app_main(void) {
   } else {
     ///// reset 'tmp_data_to_send_bin' to '0' **************************
     memset(data_in_buffer, '0', RINGBUFFER_SIZE);
-    data_in_buffer[RINGBUFFER_SIZE] = '\0';
+    data_in_buffer[RINGBUFFER_SIZE] = NULL_END;
     ///// reset 'tmp_data_to_send_bin' to '0' **************************
   }
 
