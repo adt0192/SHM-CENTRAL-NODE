@@ -5,7 +5,7 @@
 // ** Project name:               SHM CENTRAL NODE
 // ** Created by:                 Andy Duarte Taño
 // ** Created:                    25/03/2024
-// ** Last modified:              22/04/2024
+// ** Last modified:              23/04/2024
 // ** Software:                   C/C++, ESP-IDF Framework, VS Code
 // ** Hardware:                   ESP32-Ethernet-Kit_A_V1.2
 //                                Reyax RYLR998 LoRa Module
