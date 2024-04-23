@@ -113,7 +113,7 @@ msg_type in_msg_type;
 //***************************************************************************//
 //***************************** HANDLE VARIABLES ****************************//
 //***************************************************************************//
-RingbufHandle_t in_block_data_rbuf_handle;
+RingbufHandle_t data_in_rbuf_handle;
 
 static QueueHandle_t uart_queue;
 
@@ -691,28 +691,25 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     // *************************************************************************
 
     // *************************************************************************
-    // receive data block from ring (byte) buffer ******************************
+    // receive data block from RING (byte) BUFFER ******************************
     // *************************************************************************
-    /* size_t item_size;
-    tmp_data_in_buffer_block_hex = (char *)xRingbufferReceiveUpTo(
-        in_block_data_rbuf_handle, &item_size, pdMS_TO_TICKS(1000),
-        rcv_data_block_hex_characters);
+    size_t item_size;
+    char *item = (char *)xRingbufferReceiveUpTo(
+        data_in_rbuf_handle, &item_size, pdMS_TO_TICKS(1000), hex_block_size);
     //
     // Check received data
-    if (tmp_data_in_buffer_block_hex != NULL) {
-      tmp_data_in_buffer_block_hex[rcv_data_block_hex_characters] = NULL_END;
-      // Print tmp_data_in_buffer_block_hex
-      ESP_LOGW(TAG, "***DEBUGGING*** Ring Buffer ->
-    tmp_data_in_buffer_block_hex: <%s>", tmp_data_in_buffer_block_hex);
-      // Return tmp_data_in_buffer_block_hex
-      vRingbufferReturnItem(in_block_data_rbuf_handle,
-                            (void *)tmp_data_in_buffer_block_hex);
+    if (item != NULL) {
+      tmp_data_in_buffer_block_hex[hex_block_size] = NULL_END;
+      // Print item
+      ESP_LOGW(TAG, "***DEBUGGING*** Ring Buffer -> item: <%s > ", item);
+      // Return item
+      vRingbufferReturnItem(data_in_rbuf_handle, (void *)item);
     } else {
-      // Failed to receive tmp_data_in_buffer_block_hex
-      ESP_LOGE(TAG, "Failed to receive tmp_data_in_buffer_block_hex\n");
-    } */
+      // Failed to receive item
+      ESP_LOGE(TAG, "Failed to receive item\n");
+    }
     // *************************************************************************
-    // receive data block from ring (byte) buffer ******************************
+    // receive data block from RING (byte) BUFFER ******************************
     // *************************************************************************
 
     // THIS DOESN'T BELONG TO THIS YET
@@ -759,11 +756,13 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
   }
 }
 ///////////////////////////////////////////////////////////////////////////////
-//******************* Decode the data received in blocks ********************//
+//******************* Decode the data received in blocks
+//********************//
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
-//*************** Extract info from the received ctrl message ***************//
+//*************** Extract info from the received ctrl message
+//***************//
 ///////////////////////////////////////////////////////////////////////////////
 static void extract_info_from_ctrl_msg_task(void *pvParameters) {
   // to temporarily store the hexadecimal charactes for xyz amount of bits
@@ -783,20 +782,21 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
   uint8_t *min_z_value_8bit_arr = NULL;
   while (1) {
     // Block to wait for data received (+RCV=) and check if ACK
-    // Block indefinitely (without a timeout, so no need to check the function's
-    // return value) to wait for a notification. Here the RTOS task notification
-    // is being used as a binary semaphore, so the notification value is cleared
-    // to zero on exit. NOTE! Real applications should not block indefinitely,
-    // but instead time out occasionally in order to handle error conditions
-    // that may prevent the interrupt from sending any more notifications.
+    // Block indefinitely (without a timeout, so no need to check the
+    // function's return value) to wait for a notification. Here the RTOS task
+    // notification is being used as a binary semaphore, so the notification
+    // value is cleared to zero on exit. NOTE! Real applications should not
+    // block indefinitely, but instead time out occasionally in order to
+    // handle error conditions that may prevent the interrupt from sending any
+    // more notifications.
     ulTaskNotifyTake(pdTRUE,         // Clear the notification value on exit
                      portMAX_DELAY); // Block indefinitely
 
     // Print out remaining task stack memory (words) ************************
     /*  ESP_LOGE(TAG, "**************** BYTES FREE IN TASK STACK
      ****************"); ESP_LOGW(TAG, "'extract_info_from_ctrl_msg_task':
-     <%zu>", uxTaskGetStackHighWaterMark(NULL)); ESP_LOGE(TAG, "****************
-     BYTES FREE IN TASK STACK ****************"); */
+     <%zu>", uxTaskGetStackHighWaterMark(NULL)); ESP_LOGE(TAG,
+     "**************** BYTES FREE IN TASK STACK ****************"); */
     // Print out remaining task stack memory (words) ************************
 
     //     x_bits_tx       y_bits_tx       z_bits_tx
@@ -809,7 +809,8 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
     // |  min_x_value  |  min_y_value  |  min_z_value  |     <<...PAYLOAD>>
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-    // working with the xyz amount of bits values ******************************
+    // working with the xyz amount of bits values
+    // ******************************
     x_bits_hex = malloc((2 + 1) * sizeof(*x_bits_hex));
     if (x_bits_hex == NULL) {
       ESP_LOGE(TAG, "NOT ENOUGH HEAP");
@@ -850,9 +851,11 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
     // when we have already received this amount of data-type messages
     // it means we already have all the info from the sensor-node
     amount_msg_needed = (p / max_xyx_triplets_to_send) + 1;
-    // working with the xyz amount of bits values ******************************
+    // working with the xyz amount of bits values
+    // ******************************
 
-    // working with xyz min values *********************************************
+    // working with xyz min values
+    // *********************************************
     min_x_value_hex = malloc((8 + 1) * sizeof(*min_x_value_hex));
     if (min_x_value_hex == NULL) {
       ESP_LOGE(TAG, "NOT ENOUGH HEAP");
@@ -974,11 +977,13 @@ static void extract_info_from_ctrl_msg_task(void *pvParameters) {
   }
 }
 ///////////////////////////////////////////////////////////////////////////////
-//*************** Extract info from the received ctrl message ***************//
+//*************** Extract info from the received ctrl message
+//***************//
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
-//******************** Transmit ACK of the received data ********************//
+//******************** Transmit ACK of the received data
+//********************//
 ///////////////////////////////////////////////////////////////////////////////
 static void transmit_ack_task(void *pvParameters) {
   ///// header for the data to send
@@ -991,12 +996,13 @@ static void transmit_ack_task(void *pvParameters) {
   char *full_message_hex = NULL;
   while (1) {
     // Block to wait for permission to transmit
-    // Block indefinitely (without a timeout, so no need to check the function's
-    // return value) to wait for a notification. Here the RTOS task notification
-    // is being used as a binary semaphore, so the notification value is cleared
-    // to zero on exit. NOTE! Real applications should not block indefinitely,
-    // but instead time out occasionally in order to handle error conditions
-    // that may prevent the interrupt from sending any more notifications.
+    // Block indefinitely (without a timeout, so no need to check the
+    // function's return value) to wait for a notification. Here the RTOS task
+    // notification is being used as a binary semaphore, so the notification
+    // value is cleared to zero on exit. NOTE! Real applications should not
+    // block indefinitely, but instead time out occasionally in order to
+    // handle error conditions that may prevent the interrupt from sending any
+    // more notifications.
     ulTaskNotifyTake(pdTRUE,         // Clear the notification value on exit
                      portMAX_DELAY); // Block indefinitely
 
@@ -1008,11 +1014,11 @@ static void transmit_ack_task(void *pvParameters) {
     // Print out remaining task stack memory (words) ************************
 
     if ((strncmp(is_duplicated_data, "Y", 1) == 0)) {
-      // if what we received was a data with a previous transaction ID, we still
-      // need to send ACK for that transaction ID, because it means the other
-      // side didn't receive our previous 'ack' message
-      // so we set the transaction ID of the current 'ack' message to that
-      // previous transaction ID
+      // if what we received was a data with a previous transaction ID, we
+      // still need to send ACK for that transaction ID, because it means the
+      // other side didn't receive our previous 'ack' message so we set the
+      // transaction ID of the current 'ack' message to that previous
+      // transaction ID
       header_hex_of_data_to_send = add_header_hex(ack, MSG_COUNTER_RX - 1);
     } else {
       header_hex_of_data_to_send = add_header_hex(ack, MSG_COUNTER_RX);
@@ -1041,11 +1047,13 @@ static void transmit_ack_task(void *pvParameters) {
   }
 }
 ///////////////////////////////////////////////////////////////////////////////
-//******************** Transmit ACK of the received data ********************//
+//******************** Transmit ACK of the received data
+//********************//
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
-//****************** Check header of incoming data message ******************//
+//****************** Check header of incoming data message
+//******************//
 ///////////////////////////////////////////////////////////////////////////////
 static void check_header_incoming_data_task(void *pvParameters) {
   char *header_hex_MSB = NULL;
@@ -1054,12 +1062,13 @@ static void check_header_incoming_data_task(void *pvParameters) {
   uint8_t in_msg_type_tmp = 0;
   while (1) {
     // Block to wait for data received (+RCV=) and check if ACK
-    // Block indefinitely (without a timeout, so no need to check the function's
-    // return value) to wait for a notification. Here the RTOS task notification
-    // is being used as a binary semaphore, so the notification value is cleared
-    // to zero on exit. NOTE! Real applications should not block indefinitely,
-    // but instead time out occasionally in order to handle error conditions
-    // that may prevent the interrupt from sending any more notifications.
+    // Block indefinitely (without a timeout, so no need to check the
+    // function's return value) to wait for a notification. Here the RTOS task
+    // notification is being used as a binary semaphore, so the notification
+    // value is cleared to zero on exit. NOTE! Real applications should not
+    // block indefinitely, but instead time out occasionally in order to
+    // handle error conditions that may prevent the interrupt from sending any
+    // more notifications.
     ulTaskNotifyTake(pdTRUE,         // Clear the notification value on exit
                      portMAX_DELAY); // Block indefinitely
 
@@ -1075,7 +1084,8 @@ static void check_header_incoming_data_task(void *pvParameters) {
              "Lora_data.Data: <%s>",
              Lora_data.Data); */
 
-    ///// extract the header of the incoming data ******************************
+    ///// extract the header of the incoming data
+    ///******************************
     // allocating memory for the header hexadecimal string
     // ALWAYS 4 digits: 0xAAAA
     header_hex_MSB = malloc((2 + 1) * sizeof(*header_hex_MSB));
@@ -1103,11 +1113,12 @@ static void check_header_incoming_data_task(void *pvParameters) {
     //
     free(header_hex_MSB);
     free(header_hex_LSB);
-    ///// extract the header of the incoming data ******************************
+    ///// extract the header of the incoming data
+    ///******************************
 
     // combine 'header_dec_MSB' and 'header_dec_LSB' into only one variable so
-    // it's easy to compare the last 14 bits corresponding with the transaction
-    // ID of the incoming message
+    // it's easy to compare the last 14 bits corresponding with the
+    // transaction ID of the incoming message
     //
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     // |header_dec_MSB |header_dec_LSB |
@@ -1152,7 +1163,8 @@ static void check_header_incoming_data_task(void *pvParameters) {
     // if the incoming message is 'ctrl' type, we extract the info in it:
     // this is *xyz*_bits and min_*xyz*_value
     if ((in_transaction_ID_dec == MSG_COUNTER_RX) && (in_msg_type == ctrl)) {
-      // 30 characters to hold from the 4th character onwards, on Lora_data.Data
+      // 30 characters to hold from the 4th character onwards, on
+      // Lora_data.Data
       in_ctrl_msg = malloc((30 + 1) * sizeof(*header_hex_MSB));
       if (in_ctrl_msg == NULL) {
         ESP_LOGE(TAG, "NOT ENOUGH HEAP");
@@ -1178,12 +1190,14 @@ static void check_header_incoming_data_task(void *pvParameters) {
       // we are sending ACK message thru lora
       is_sending_ack = "Y";
 
-      // *********************** SENDING TO RING BUFFER ***********************
-      // *********************** SENDING TO RING BUFFER ***********************
-      // *********************** SENDING TO RING BUFFER ***********************
-      // only if 'in_transaction_ID_dec == MSG_COUNTER_RX' it's true, it means
-      // we didn't receive a dplicated message, so it's safe to send to ring
-      // buffer
+      // *********************** SENDING TO RING BUFFER
+      // ***********************
+      // *********************** SENDING TO RING BUFFER
+      // ***********************
+      // *********************** SENDING TO RING BUFFER
+      // *********************** only if 'in_transaction_ID_dec ==
+      // MSG_COUNTER_RX' it's true, it means we didn't receive a dplicated
+      // message, so it's safe to send to ring buffer
       //
       if ((in_transaction_ID_dec == MSG_COUNTER_RX) && (in_msg_type == data)) {
         strcpy(data_in_buffer + sum_previous_block_data_size, Lora_data.Data);
@@ -1199,18 +1213,21 @@ static void check_header_incoming_data_task(void *pvParameters) {
                  "**********************************************************");
 
         // send the received block to ring buffer
-        /* UBaseType_t res_send_rbuf =
-            xRingbufferSend(in_block_data_rbuf_handle, Lora_data.Data,
-                            sizeof(Lora_data.Data), pdMS_TO_TICKS(DELAY / 10));
+        UBaseType_t res_send_rbuf =
+            xRingbufferSend(data_in_rbuf_handle, Lora_data.Data,
+                            strlen(Lora_data.Data), pdMS_TO_TICKS(DELAY / 10));
         if (res_send_rbuf != pdTRUE) {
           ESP_LOGE(TAG, "Failed to send item");
         } else {
           ESP_LOGI(TAG, "Item sent to ring buffer");
-        } */
+        }
       }
-      // *********************** SENDING TO RING BUFFER ***********************
-      // *********************** SENDING TO RING BUFFER ***********************
-      // *********************** SENDING TO RING BUFFER ***********************
+      // *********************** SENDING TO RING BUFFER
+      // ***********************
+      // *********************** SENDING TO RING BUFFER
+      // ***********************
+      // *********************** SENDING TO RING BUFFER
+      // ***********************
 
       ///// VISUALIZE
       ///**********************************************************
@@ -1521,12 +1538,11 @@ void app_main(void) {
   }
 
   // ring buffer init
-  in_block_data_rbuf_handle =
-      xRingbufferCreate(RINGBUFFER_SIZE, RINGBUFFER_TYPE);
-  if (in_block_data_rbuf_handle == NULL) {
+  data_in_rbuf_handle = xRingbufferCreate(RINGBUFFER_SIZE, RINGBUFFER_TYPE);
+  if (data_in_rbuf_handle == NULL) {
     ESP_LOGE(TAG, "Failed to create ring buffer\n");
   } else {
-    ESP_LOGI(TAG, "Ring Buffer 'in_block_data_rbuf_handle' !!!CREATED!!!");
+    ESP_LOGI(TAG, "Ring Buffer 'data_in_rbuf_handle' !!!CREATED!!!");
   }
 
   init_led();
