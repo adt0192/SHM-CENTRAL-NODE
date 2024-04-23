@@ -693,15 +693,30 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     // *************************************************************************
     // receive data block from RING (byte) BUFFER ******************************
     // *************************************************************************
+    size_t available_bytes = xRingbufferGetCurFreeSize(data_in_rbuf_handle);
+    if (available_bytes > 0) {
+      xRingbufferSend(data_in_rbuf_handle, NULL, available_bytes,
+                      pdMS_TO_TICKS(1000));
+    }
+
     size_t item_size;
+    size_t item_max_size = hex_block_size + 4;
     char *item = (char *)xRingbufferReceiveUpTo(
-        data_in_rbuf_handle, &item_size, pdMS_TO_TICKS(1000), hex_block_size);
+        data_in_rbuf_handle, &item_size, pdMS_TO_TICKS(1000), item_max_size);
     //
     // Check received data
     if (item != NULL) {
       tmp_data_in_buffer_block_hex[hex_block_size] = NULL_END;
       // Print item
-      ESP_LOGW(TAG, "***DEBUGGING*** Ring Buffer -> item: <%s > ", item);
+      ESP_LOGW(TAG,
+               "***DEBUGGING*** Ring Buffer -> maximum amount of bytes to "
+               "retrieve: <%zu\n> ",
+               item_max_size);
+      ESP_LOGW(TAG, "***DEBUGGING*** Ring Buffer -> item: <%s\n> ", item);
+      ESP_LOGW(
+          TAG,
+          "***DEBUGGING*** Ring Buffer -> size of the retrieved item: <%zu\n> ",
+          item_size);
       // Return item
       vRingbufferReturnItem(data_in_rbuf_handle, (void *)item);
     } else {
