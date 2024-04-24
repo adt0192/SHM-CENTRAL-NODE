@@ -36,8 +36,10 @@
 #include "driver/uart.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/message_buffer.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "freertos/stream_buffer.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
 #include "numerical_systems_conv.h"
@@ -115,6 +117,8 @@ msg_type in_msg_type;
 //***************************************************************************//
 RingbufHandle_t data_in_rbuf_handle;
 
+MessageBufferHandle_t data_in_msg_buf_handle;
+
 static QueueHandle_t uart_queue;
 
 // Handles for the tasks
@@ -162,7 +166,7 @@ char *in_ctrl_msg = NULL;
 double resolution = 0;
 
 // RingBuffer variables
-#define RINGBUFFER_SIZE 4096
+#define IN_BUFFER_SIZE 4096
 #define RINGBUFFER_TYPE RINGBUF_TYPE_BYTEBUF
 
 #define INCOMING_UART_DATA_SIZE 128
@@ -690,42 +694,76 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     // EXTRACT THE BLOCK OF INFO OUT FROM DATA_IN_BUFFER ***********************
     // *************************************************************************
 
-    // *************************************************************************
-    // receive data block from RING (byte) BUFFER ******************************
-    // *************************************************************************
-    size_t available_bytes = xRingbufferGetCurFreeSize(data_in_rbuf_handle);
-    if (available_bytes > 0) {
-      xRingbufferSend(data_in_rbuf_handle, NULL, available_bytes,
-                      pdMS_TO_TICKS(1000));
-    }
+    ////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////
+    // send to message buffer **********************************************
+    size_t xReceivedBytes;
+    char item[hex_block_size + 4];
+    size_t item_max_size = hex_block_size;
+    // receive the next message from the message buffer. Wait in the Blocked
+    //  state (so not using any CPU processing time) for a maximum of
+    //  portMAX_DELAY for a message to become available
+    xReceivedBytes =
+        xMessageBufferReceive(/* The message buffer to receive from. */
+                              data_in_msg_buf_handle,
+                              /* Location to store received data. */
+                              item,
+                              /* Maximum number of bytes to receive. */
+                              item_max_size,
+                              /* Ticks to wait if buffer is empty. */
+                              portMAX_DELAY);
+    ESP_LOGW(TAG,
+             "***DEBUGGING*** Message Buffer -> size of the retrieved item: "
+             "<%zu\n> ",
+             xReceivedBytes);
+    ESP_LOGW(TAG, "***DEBUGGING*** Message Buffer -> item: <%s> ", item);
 
-    size_t item_size;
-    size_t item_max_size = hex_block_size + 4;
-    char *item = (char *)xRingbufferReceiveUpTo(
-        data_in_rbuf_handle, &item_size, pdMS_TO_TICKS(1000), item_max_size);
-    //
-    // Check received data
-    if (item != NULL) {
-      tmp_data_in_buffer_block_hex[hex_block_size] = NULL_END;
-      // Print item
-      ESP_LOGW(TAG,
-               "***DEBUGGING*** Ring Buffer -> maximum amount of bytes to "
-               "retrieve: <%zu\n> ",
-               item_max_size);
-      ESP_LOGW(TAG, "***DEBUGGING*** Ring Buffer -> item: <%s\n> ", item);
-      ESP_LOGW(
-          TAG,
-          "***DEBUGGING*** Ring Buffer -> size of the retrieved item: <%zu\n> ",
-          item_size);
-      // Return item
-      vRingbufferReturnItem(data_in_rbuf_handle, (void *)item);
-    } else {
-      // Failed to receive item
-      ESP_LOGE(TAG, "Failed to receive item\n");
+    if (xReceivedBytes > 0) {
+      // ''item'' contains a message that is xReceivedBytes long. Process
+      // the message here....
     }
+    // send to message buffer **********************************************
+    ////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////
+
+    ///////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
     // *************************************************************************
     // receive data block from RING (byte) BUFFER ******************************
     // *************************************************************************
+    /* size_t available_bytes = xRingbufferGetCurFreeSize(data_in_rbuf_handle);
+    size_t item_size;
+    size_t item_max_size = hex_block_size;
+    char *item;
+
+    for (size_t i = 0; i < amount_msg_needed; i++) {
+      item = (char *)xRingbufferReceiveUpTo(data_in_rbuf_handle, &item_size,
+                                            pdMS_TO_TICKS(1000), item_max_size);
+      //
+      // Check received data
+      if (item != NULL) {
+        // item[item_max_size] = NULL_END;
+        //  Print item
+        ESP_LOGW(TAG,
+                 "***DEBUGGING*** Ring Buffer -> maximum amount of bytes to "
+                 "retrieve: <%zu> ",
+                 item_max_size);
+        ESP_LOGW(TAG, "***DEBUGGING*** Ring Buffer -> item: <%s> ", item);
+        ESP_LOGW(TAG,
+                 "***DEBUGGING*** Ring Buffer -> size of the retrieved item: "
+                 "<%zu\n> ",
+                 item_size);
+        // Return item
+        vRingbufferReturnItem(data_in_rbuf_handle, (void *)item);
+      } else {
+        ESP_LOGE(TAG, "Failed to receive item\n");
+      }
+    } */
+    // *************************************************************************
+    // receive data block from RING (byte) BUFFER ******************************
+    // *************************************************************************
+    ///////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
 
     // THIS DOESN'T BELONG TO THIS YET
     // NOT FORGET ABOUT FREEING UP ALLOCATED MEMORY
@@ -749,7 +787,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     free(tmp_segment_hex);
     free(tmp_segment_bin);
 
-    ESP_LOGW(TAG, "***DEBUGGING*** BEFORE free(tmp_*xyz_*sample)");
+    ESP_LOGW(TAG, "***DEBUGGING*** BEFORE free(tmp_*xyz_*sample\n)");
     free(tmp_x_sample);
     free(tmp_y_sample);
     free(tmp_z_sample);
@@ -764,7 +802,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     ESP_LOGI(TAG, "x_bits= <%u>", x_bits);
     ESP_LOGI(TAG, "y_bits= <%u>", y_bits);
     ESP_LOGI(TAG, "z_bits= <%u>", z_bits);
-    ESP_LOGE(TAG, "********************** MIN VALUES **********************");
+    ESP_LOGE(TAG, "********************** MIN VALUES **********************\n");
 
     ESP_LOGE(TAG, "******************** <APP FINISHED> *********************");
     ESP_LOGE(TAG, "******************** <APP FINISHED> *********************");
@@ -1227,15 +1265,57 @@ static void check_header_incoming_data_task(void *pvParameters) {
         ESP_LOGE(TAG,
                  "**********************************************************");
 
-        // send the received block to ring buffer
-        UBaseType_t res_send_rbuf =
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
+        // send to message buffer **********************************************
+        size_t xBytesSent;
+        // send the data to the message buffer. Return immediately if there is
+        // not enough space in the buffer
+        xBytesSent =
+            xMessageBufferSend(/* The message buffer to write to. */
+                               data_in_msg_buf_handle,
+                               /* The source of the data to send. */
+                               (void *)Lora_data.Data,
+                               /* The length of the data to send. */
+                               strlen(Lora_data.Data),
+                               /* The block time, should the buffer be full. */
+                               0);
+
+        if (xBytesSent != strlen(Lora_data.Data)) {
+          // the string could not be added to the message buffer because there
+          // was not enough free space in the buffer
+          ESP_LOGE(TAG, "The data coudln't be added to the Message Buffer "
+                        "because there was not enough space\n");
+        } else {
+          ESP_LOGI(TAG, "Item sent to Message Buffer");
+          // Queries a message buffer to see how much free space it contains,
+          // which is equal to the amount of data that can be sent to the
+          // message buffer before it is full.
+          // The returned value is 4 bytes larger than the maximum message size
+          // that can be sent to the message buffer.
+          ESP_LOGI(TAG, "Message Buffer free space: <%zu>",
+                   xMessageBufferSpacesAvailable(data_in_msg_buf_handle));
+        }
+        // send to message buffer **********************************************
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
+
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
+        // send the received block to ring buffer ******************************
+        /* UBaseType_t res_send_rbuf =
             xRingbufferSend(data_in_rbuf_handle, Lora_data.Data,
                             strlen(Lora_data.Data), pdMS_TO_TICKS(DELAY / 10));
         if (res_send_rbuf != pdTRUE) {
           ESP_LOGE(TAG, "Failed to send item");
         } else {
           ESP_LOGI(TAG, "Item sent to ring buffer");
-        }
+          ESP_LOGI(TAG, "Ring Buffer free space: <%zu>",
+                   xRingbufferGetCurFreeSize(data_in_rbuf_handle));
+        } */
+        // send the received block to ring buffer ******************************
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
       }
       // *********************** SENDING TO RING BUFFER
       // ***********************
@@ -1531,34 +1611,53 @@ void init_uart(void) {
   ESP_LOGI(TAG, "UART Interface Configuration !!!COMPLETED!!!");
 }
 ///////////////////////////////////////////////////////////////////////////////
-//*************************** UART Initialization
-//***************************//
+//*************************** UART Initialization ***************************//
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
-//******************************** Main Task
-//********************************//
+//******************************** Main Task ********************************//
 ///////////////////////////////////////////////////////////////////////////////
 void app_main(void) {
   // alternative to ring buffer
-  data_in_buffer = malloc((RINGBUFFER_SIZE + 1) * sizeof(*data_in_buffer));
+  data_in_buffer = malloc((IN_BUFFER_SIZE + 1) * sizeof(*data_in_buffer));
   if (data_in_buffer == NULL) {
     ESP_LOGE(TAG, "NOT ENOUGH HEAP");
     ESP_LOGE(TAG, "Failed to allocate *data_in_buffer");
   } else {
     ///// reset 'tmp_data_to_send_bin' to '0' **************************
-    memset(data_in_buffer, '0', RINGBUFFER_SIZE);
-    data_in_buffer[RINGBUFFER_SIZE] = NULL_END;
+    memset(data_in_buffer, '0', IN_BUFFER_SIZE);
+    data_in_buffer[IN_BUFFER_SIZE] = NULL_END;
     ///// reset 'tmp_data_to_send_bin' to '0' **************************
   }
 
-  // ring buffer init
-  data_in_rbuf_handle = xRingbufferCreate(RINGBUFFER_SIZE, RINGBUFFER_TYPE);
+  ///////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////////
+  // MESSAGE BUFFER ************************************************************
+  data_in_msg_buf_handle = xMessageBufferCreate(IN_BUFFER_SIZE);
+  if (data_in_msg_buf_handle == NULL) {
+    /* There was not enough heap memory space available to create the
+    message buffer. */
+    ESP_LOGE(TAG, "Failed to create Message Buffer\n");
+  } else {
+    /* The message buffer was created successfully and can now be used. */
+    ESP_LOGI(TAG, "Message Buffer 'data_in_msg_buf_handle' !!!CREATED!!!");
+  }
+  // MESSAGE BUFFER ************************************************************
+  ///////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////////
+
+  ///////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////////
+  // ring buffer init **********************************************************
+  /* data_in_rbuf_handle = xRingbufferCreate(IN_BUFFER_SIZE, RINGBUFFER_TYPE);
   if (data_in_rbuf_handle == NULL) {
     ESP_LOGE(TAG, "Failed to create ring buffer\n");
   } else {
     ESP_LOGI(TAG, "Ring Buffer 'data_in_rbuf_handle' !!!CREATED!!!");
-  }
+  } */
+  // ring buffer init **********************************************************
+  ///////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////////
 
   init_led();
   ESP_LOGI(TAG, "Waiting 50 ms");
@@ -1628,6 +1727,5 @@ void app_main(void) {
   ESP_LOGI(TAG, "******************************************************\n");
 }
 ///////////////////////////////////////////////////////////////////////////////
-//******************************** Main Task
-//********************************//
+//******************************** Main Task ********************************//
 ///////////////////////////////////////////////////////////////////////////////

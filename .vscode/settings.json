@@ -25,6 +25,10 @@
         "bitset": "c",
         "chrono": "c",
         "algorithm": "c",
-        "rylr998.h": "c"
+        "rylr998.h": "c",
+        "queue.h": "c",
+        "message_buffer.h": "c",
+        "semphr.h": "c",
+        "timers.h": "c"
     }
 }
