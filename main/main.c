@@ -669,7 +669,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
         strncpy(tmp_x_sample, tmp_data_in_buffer_block_bin + k, x_bits);
         tmp_x_sample[x_bits] = NULL_END; // ensure null ending
         strcpy(x_samples_compressed_bin[d_a], tmp_x_sample);
-        ESP_LOGW(TAG, "***DEBUGGING*** tmp_x_sample(%d)' -> <%s>", d_a,
+        ESP_LOGW(TAG, "***DEBUGGING*** tmp_x_sample(%d) -> <%s>", d_a,
                  tmp_x_sample);
         //
         // y data
@@ -677,7 +677,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
                 y_bits);
         tmp_y_sample[y_bits] = NULL_END; // ensure null ending
         strcpy(y_samples_compressed_bin[d_a], tmp_y_sample);
-        ESP_LOGW(TAG, "***DEBUGGING*** tmp_y_sample(%d)' -> <%s>", d_a,
+        ESP_LOGW(TAG, "***DEBUGGING*** tmp_y_sample(%d) -> <%s>", d_a,
                  tmp_y_sample);
         //
         // z data
@@ -685,7 +685,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
                 tmp_data_in_buffer_block_bin + (k + x_bits + y_bits), z_bits);
         tmp_z_sample[z_bits] = NULL_END; // ensure null ending
         strcpy(z_samples_compressed_bin[d_a], tmp_z_sample);
-        ESP_LOGW(TAG, "***DEBUGGING*** tmp_z_sample(%d)' -> <%s>", d_a,
+        ESP_LOGW(TAG, "***DEBUGGING*** tmp_z_sample(%d) -> <%s>", d_a,
                  tmp_z_sample);
         //
         d_a++;
@@ -790,24 +790,25 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     // FREEING UP ALLOCATED MEMORY *********************************************
     // FREEING UP ALLOCATED MEMORY *********************************************
     // FREEING UP ALLOCATED MEMORY *********************************************
-    ESP_LOGW(TAG, "***DEBUGGING*** BEFORE free(xyz_samples_compressed_bin[i])");
+    // ESP_LOGW(TAG, "***DEBUGGING*** BEFORE
+    // free(xyz_samples_compressed_bin[i])");
     for (size_t adt = 0; adt < p; adt++) {
       free(x_samples_compressed_bin[adt]);
       free(y_samples_compressed_bin[adt]);
       free(z_samples_compressed_bin[adt]);
     }
 
-    ESP_LOGW(TAG, "***DEBUGGING*** BEFORE free(tmp_data_in_buffer_block_bin)");
+    // ESP_LOGW(TAG, "***DEBUGGING*** BEFORE
+    // free(tmp_data_in_buffer_block_bin)");
     free(tmp_data_in_buffer_block_hex);
     free(tmp_data_in_buffer_block_bin);
 
-    ESP_LOGW(
-        TAG,
-        "***DEBUGGING*** BEFORE free(tmp_segment_hex) & free(tmp_segment_bin)");
+    // ESP_LOGW(TAG, "***DEBUGGING*** BEFORE free(tmp_segment_hex) &
+    // free(tmp_segment_bin)");
     free(tmp_segment_hex);
     free(tmp_segment_bin);
 
-    ESP_LOGW(TAG, "***DEBUGGING*** BEFORE free(tmp_*xyz_*sample\n)");
+    // ESP_LOGW(TAG, "***DEBUGGING*** BEFORE free(tmp_*xyz_*sample\n)");
     free(tmp_x_sample);
     free(tmp_y_sample);
     free(tmp_z_sample);
