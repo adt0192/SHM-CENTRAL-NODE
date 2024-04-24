@@ -117,6 +117,17 @@ msg_type in_msg_type;
 //***************************************************************************//
 RingbufHandle_t data_in_rbuf_handle;
 
+// To enable message buffers to handle variable sized messages the length of
+// each message is written into the message buffer before the message itself
+// (that happens internally with the FreeRTOS API functions). The length is
+// stored in a variable, the type of which is set by the
+// configMESSAGE_BUFFER_LENGTH_TYPE constant in FreeRTOSConfig.h.
+// configMESSAGE_BUFFER_LENGTH_TYPE defaults to be of type size_t if left
+// undefined. size_t is typically 4-bytes on a 32-bit architecture. Therefore,
+// as an example, writing a 10 byte message into a message buffer will actually
+// consume 14 bytes of buffer space when configMESSAGE_BUFFER_LENGTH_TYPE is
+// 4-bytes. Likewise writing a 100 byte message into a message buffer will
+// actually store 104 bytes of buffer space.
 MessageBufferHandle_t data_in_msg_buf_handle;
 
 static QueueHandle_t uart_queue;
@@ -698,29 +709,38 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     ////////////////////////////////////////////////////////////////////////
     // send to message buffer **********************************************
     size_t xReceivedBytes;
-    char item[hex_block_size + 4];
+    char item[hex_block_size + 1];
     size_t item_max_size = hex_block_size;
-    // receive the next message from the message buffer. Wait in the Blocked
-    //  state (so not using any CPU processing time) for a maximum of
-    //  portMAX_DELAY for a message to become available
-    xReceivedBytes =
-        xMessageBufferReceive(/* The message buffer to receive from. */
-                              data_in_msg_buf_handle,
-                              /* Location to store received data. */
-                              item,
-                              /* Maximum number of bytes to receive. */
-                              item_max_size,
-                              /* Ticks to wait if buffer is empty. */
-                              portMAX_DELAY);
-    ESP_LOGW(TAG,
-             "***DEBUGGING*** Message Buffer -> size of the retrieved item: "
-             "<%zu\n> ",
-             xReceivedBytes);
-    ESP_LOGW(TAG, "***DEBUGGING*** Message Buffer -> item: <%s> ", item);
 
-    if (xReceivedBytes > 0) {
-      // ''item'' contains a message that is xReceivedBytes long. Process
-      // the message here....
+    ESP_LOGI(TAG, "Message Buffer free space before reading the data: <%zu>\n",
+             xMessageBufferSpacesAvailable(data_in_msg_buf_handle));
+
+    for (size_t i = 0; i < amount_msg_needed; i++) {
+      // receive the next message from the message buffer. Wait in the Blocked
+      //  state (so not using any CPU processing time) for a maximum of
+      //  portMAX_DELAY for a message to become available
+      xReceivedBytes =
+          xMessageBufferReceive(/* The message buffer to receive from. */
+                                data_in_msg_buf_handle,
+                                /* Location to store received data. */
+                                item,
+                                /* Maximum number of bytes to receive. */
+                                item_max_size,
+                                /* Ticks to wait if buffer is empty. */
+                                portMAX_DELAY);
+      ESP_LOGW(TAG,
+               "***DEBUGGING*** Message Buffer -> size of the retrieved item: "
+               "<%zu> ",
+               xReceivedBytes);
+      ESP_LOGW(TAG, "***DEBUGGING*** Message Buffer -> item: <%s>", item);
+      ESP_LOGI(TAG,
+               "Message Buffer free space after reading block (%zu): <%zu>\n",
+               i, xMessageBufferSpacesAvailable(data_in_msg_buf_handle));
+
+      if (xReceivedBytes > 0) {
+        // ''item'' contains a message that is xReceivedBytes long. Process
+        // the message here....
+      }
     }
     // send to message buffer **********************************************
     ////////////////////////////////////////////////////////////////////////
@@ -1293,7 +1313,7 @@ static void check_header_incoming_data_task(void *pvParameters) {
           // message buffer before it is full.
           // The returned value is 4 bytes larger than the maximum message size
           // that can be sent to the message buffer.
-          ESP_LOGI(TAG, "Message Buffer free space: <%zu>",
+          ESP_LOGI(TAG, "Message Buffer free space: <%zu>\n",
                    xMessageBufferSpacesAvailable(data_in_msg_buf_handle));
         }
         // send to message buffer **********************************************
