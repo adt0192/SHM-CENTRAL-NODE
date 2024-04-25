@@ -115,7 +115,8 @@ msg_type in_msg_type;
 //***************************************************************************//
 //***************************** HANDLE VARIABLES ****************************//
 //***************************************************************************//
-RingbufHandle_t data_in_rbuf_handle;
+TimerHandle_t
+    decoding_data_timer_handle; // global variable to work with the timer
 
 // To enable message buffers to handle variable sized messages the length of
 // each message is written into the message buffer before the message itself
@@ -147,6 +148,17 @@ static TaskHandle_t check_header_incoming_data_task_handle = NULL,
 // testing parameters
 frequency_t test_freq = F_125HZ;
 scale_t test_scale = SCALE_8G;
+
+uint16_t in_transaction_ID_dec = 0;
+
+const int16_t decoding_data_start_time = 6000;
+const int timerID = 1;
+
+// to keep track of the transaction ID of the last data message we receeived
+uint16_t last_data_msg_id = 0;
+
+// to keep track of the received messages after the 'ctrl' message
+uint8_t received_messages = 0;
 
 // alternative to ring buffer
 char *data_in_buffer = NULL;
@@ -264,6 +276,78 @@ static const char *TAG = "SHM CENTRAL NODE";
 //* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *//
 //+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+//
 //+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+//
+
+///////////////////////////////////////////////////////////////////////////////
+//******************* Callback function when timer expires ******************//
+///////////////////////////////////////////////////////////////////////////////
+void vTimerCallbackDecodeData(TimerHandle_t pxTimer) {
+  // Define a callback function that will be used by multiple timer instances.
+  // The callback function counts the number of times the timer expires,
+  // and stop the timer once the timer has expired 5 times.
+
+  ESP_LOGW(TAG, "DECODING DATA TIMER timed-out");
+
+  // Optionally do something if the pxTimer parameter is NULL.
+  // configASSERT(pxTimer);
+}
+///////////////////////////////////////////////////////////////////////////////
+//******************* Callback function when timer expires ******************//
+///////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////
+//**************** Setting timer for decoding received data *****************//
+///////////////////////////////////////////////////////////////////////////////
+// this timer is to wait before we decode all the data we already received from
+// the sensonr node
+// if the timer expires and no duplicate message of the last data message is
+// received, it means the sensor node already received the 'ack' of the last
+// data message, so we can safely begin to decode the data
+// if not, it means the sensor node didn't receive the 'ack' of the last data
+// message, so he will send us again the last data message
+esp_err_t set_timer_decoding_data() {
+  // Create then start the timer. Starting the timer before the scheduler
+  // has been started means the timers will start running immediately that
+  // the scheduler starts.
+
+  ESP_LOGI(TAG, "RYLR998 Timer init configuration");
+  decoding_data_timer_handle = xTimerCreate(
+      "DECODING DATA TIMER", // Just a text name, not used by the
+                             // kernel.
+      (pdMS_TO_TICKS(
+          decoding_data_start_time)), // Timer period in ticks. The function
+                                      // converts milisec to ticks
+      pdTRUE, // The timers will auto-reload themselves when they expire.
+      (void *)timerID,         // Assign the timer a unique id equal
+      vTimerCallbackDecodeData // Each timer calls the same callback when it
+                               // expires.
+  );
+
+  if (decoding_data_timer_handle == NULL) {
+    // The timer was not created.
+    ESP_LOGE(TAG, "***DECODING DATA TIMER was not created***");
+  } else {
+    // Start the timer.  No block time is specified, and even if one was
+    // it would be ignored because the scheduler has not yet been
+    // started.
+    if (xTimerStart(decoding_data_timer_handle, 0) != pdPASS) {
+      // The timer could not be set into the Active state.
+      ESP_LOGE(
+          TAG,
+          "***DECODING DATA TIMER could not be set into the Active state***");
+
+      // I can get rid if this if, because we start the timer and the line below
+      // stops it, IT´S REDUNDANT
+    }
+  }
+
+  xTimerStop(decoding_data_timer_handle, 0);
+  ESP_LOGI(TAG, "DECODING DATA TIMER configured and stopped !!!COMPLETED!!!");
+
+  return ESP_OK;
+}
+///////////////////////////////////////////////////////////////////////////////
+//**************** Setting timer for decoding received data *****************//
+///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
 //**************************** ACCEL RESOLUTION *****************************//
@@ -744,7 +828,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
             "<%zu> ",
             xReceivedBytes);
         ESP_LOGW(TAG, "***DEBUGGING*** Message Buffer -> item: <%s>", item);
-        ESP_LOGI(TAG,
+        ESP_LOGW(TAG,
                  "Message Buffer free space after reading block (%zu): <%zu>\n",
                  i, xMessageBufferSpacesAvailable(data_in_msg_buf_handle));
       }
@@ -1238,7 +1322,7 @@ static void check_header_incoming_data_task(void *pvParameters) {
     }
 
     // extract the transaction ID from the incoming header
-    uint16_t in_transaction_ID_dec = 0;
+
     in_transaction_ID_dec = in_message_header_dec & 0x3FFF;
     ESP_LOGW(TAG, "***DEBUGGING*** Transaction ID of incoming message: <%u>",
              in_transaction_ID_dec);
@@ -1257,6 +1341,8 @@ static void check_header_incoming_data_task(void *pvParameters) {
       //
       strcpy(in_ctrl_msg, Lora_data.Data + 4);
 
+      received_messages = 0;
+
       xTaskNotifyGive(extract_info_from_ctrl_msg_task_handle);
     }
 
@@ -1273,16 +1359,17 @@ static void check_header_incoming_data_task(void *pvParameters) {
       // we are sending ACK message thru lora
       is_sending_ack = "Y";
 
-      // *********************** SENDING TO RING BUFFER
-      // ***********************
-      // *********************** SENDING TO RING BUFFER
-      // ***********************
-      // *********************** SENDING TO RING BUFFER
-      // *********************** only if 'in_transaction_ID_dec ==
+      // only if 'in_transaction_ID_dec ==
       // MSG_COUNTER_RX' it's true, it means we didn't receive a dplicated
-      // message, so it's safe to send to ring buffer
-      //
+      // message, so it's safe to send to data_in_buffer
       if ((in_transaction_ID_dec == MSG_COUNTER_RX) && (in_msg_type == data)) {
+        // increment the counter of the messages we are receiving after the
+        // 'ctrl' message
+        received_messages++;
+
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
+        // send to data_in_buffer **********************************************
         strcpy(data_in_buffer + sum_previous_block_data_size, Lora_data.Data);
         ESP_LOGE(TAG,
                  "**********************************************************");
@@ -1294,6 +1381,9 @@ static void check_header_incoming_data_task(void *pvParameters) {
         data_in_buffer[sum_previous_block_data_size] = NULL_END;
         ESP_LOGE(TAG,
                  "**********************************************************");
+        // send to data_in_buffer **********************************************
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
 
         ////////////////////////////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////
@@ -1329,30 +1419,7 @@ static void check_header_incoming_data_task(void *pvParameters) {
         // send to message buffer **********************************************
         ////////////////////////////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////
-
-        ////////////////////////////////////////////////////////////////////////
-        ////////////////////////////////////////////////////////////////////////
-        // send the received block to ring buffer ******************************
-        /* UBaseType_t res_send_rbuf =
-            xRingbufferSend(data_in_rbuf_handle, Lora_data.Data,
-                            strlen(Lora_data.Data), pdMS_TO_TICKS(DELAY / 10));
-        if (res_send_rbuf != pdTRUE) {
-          ESP_LOGE(TAG, "Failed to send item");
-        } else {
-          ESP_LOGI(TAG, "Item sent to ring buffer");
-          ESP_LOGI(TAG, "Ring Buffer free space: <%zu>",
-                   xRingbufferGetCurFreeSize(data_in_rbuf_handle));
-        } */
-        // send the received block to ring buffer ******************************
-        ////////////////////////////////////////////////////////////////////////
-        ////////////////////////////////////////////////////////////////////////
       }
-      // *********************** SENDING TO RING BUFFER
-      // ***********************
-      // *********************** SENDING TO RING BUFFER
-      // ***********************
-      // *********************** SENDING TO RING BUFFER
-      // ***********************
 
       ///// VISUALIZE
       ///**********************************************************
@@ -1449,8 +1516,9 @@ static void uart_task(void *pvParameters) {
         ESP_LOGI(TAG, "Data received from LoRa module: %s", incoming_uart_data);
         ESP_LOGI(TAG, "Length of data received: event.size = %zu", event.size);
 
-        ///// if the module answers +OK and we are sending data
-        ///****************
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
+        // if the module answers +OK and we are sending data *******************
         if ((strncmp((const char *)incoming_uart_data, "+OK", 3) == 0) &&
             (strncmp((const char *)is_sending_ack, "Y", 1) == 0)) {
           // so we already sent ack, we put the flag back to "N"
@@ -1463,7 +1531,8 @@ static void uart_task(void *pvParameters) {
           if (strncmp((const char *)is_duplicated_data, "N", 1) == 0) {
             // if the following is 'true', it means we already have all the
             // messages needed to conform the data from the sensor-node
-            if (amount_msg_needed == MSG_COUNTER_RX) {
+            if (amount_msg_needed == received_messages) {
+              last_data_msg_id = MSG_COUNTER_RX;
               sum_previous_block_data_size = 0;
               xTaskNotifyGive(decode_rcv_blocked_data_task_handle);
             }
@@ -1475,11 +1544,13 @@ static void uart_task(void *pvParameters) {
                      MSG_COUNTER_RX);
           }
         }
-        ///// if the module answers +OK and we are sending data
-        ///****************
+        // if the module answers +OK and we are sending data *******************
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
 
-        ///// if the module is receiving data, we proccess it
-        ///******************
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
+        // if the module is receiving data, we proccess it *********************
         // but only if the module is fully configured
         if (((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0) ||
              (start_uart_block)) &&
@@ -1563,8 +1634,10 @@ static void uart_task(void *pvParameters) {
           } // if (event.size != 120)
         }   // if ((strncmp((const char *)incoming_uart_data, "+RCV=", 5) == 0)
           // && (strncmp((const char *)is_rylr998_module_init, "Y", 1) == 0))
-        ///// if the module is receiving data, we proccess it
-        ///******************
+        // if the module is receiving data, we proccess it *********************
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
+
         break;
 
       // Event of HW FIFO overflow detected
