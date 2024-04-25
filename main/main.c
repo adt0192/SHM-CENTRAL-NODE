@@ -158,7 +158,7 @@ const int timerID = 1;
 uint16_t last_data_msg_id = 0;
 
 // to keep track of the received messages after the 'ctrl' message
-uint8_t received_messages = 0;
+uint8_t received_data_messages = 0;
 
 // alternative to ring buffer
 char *data_in_buffer = NULL;
@@ -287,8 +287,10 @@ void vTimerCallbackDecodeData(TimerHandle_t pxTimer) {
 
   ESP_LOGW(TAG, "DECODING DATA TIMER timed-out");
 
-  // Optionally do something if the pxTimer parameter is NULL.
-  // configASSERT(pxTimer);
+  if (strncmp((const char *)is_duplicated_data, "N", 1) == 0) {
+    xTimerStop(decoding_data_timer_handle, 0);
+    xTaskNotifyGive(decode_rcv_blocked_data_task_handle);
+  }
 }
 ///////////////////////////////////////////////////////////////////////////////
 //******************* Callback function when timer expires ******************//
@@ -505,10 +507,10 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     ulTaskNotifyTake(pdTRUE,         // Clear the notification value on exit
                      portMAX_DELAY); // Block indefinitely
 
-    ESP_LOGI(TAG, "Waiting 6 seconds");
+    /* ESP_LOGI(TAG, "Waiting 6 seconds");
     gpio_set_level(LED_PIN, 1);
     vTaskDelay(pdMS_TO_TICKS(6000));
-    gpio_set_level(LED_PIN, 0);
+    gpio_set_level(LED_PIN, 0); */
 
     // ALLOCATING NEEDED SPACE
     // to store the extracted x, y, z sample from the received block of data
@@ -1341,7 +1343,7 @@ static void check_header_incoming_data_task(void *pvParameters) {
       //
       strcpy(in_ctrl_msg, Lora_data.Data + 4);
 
-      received_messages = 0;
+      received_data_messages = 0;
 
       xTaskNotifyGive(extract_info_from_ctrl_msg_task_handle);
     }
@@ -1359,13 +1361,20 @@ static void check_header_incoming_data_task(void *pvParameters) {
       // we are sending ACK message thru lora
       is_sending_ack = "Y";
 
+      // if the following is 'true' it means we received a duplicate of the last
+      // data message because the sensor node didn't receive the 'ack' of that
+      // last data message, so we reset the 'DECODING DATA TIMER'
+      if (in_transaction_ID_dec == last_data_msg_id) {
+        xTimerReset(decoding_data_timer_handle, 0);
+      }
+
       // only if 'in_transaction_ID_dec ==
       // MSG_COUNTER_RX' it's true, it means we didn't receive a dplicated
       // message, so it's safe to send to data_in_buffer
       if ((in_transaction_ID_dec == MSG_COUNTER_RX) && (in_msg_type == data)) {
         // increment the counter of the messages we are receiving after the
         // 'ctrl' message
-        received_messages++;
+        received_data_messages++;
 
         ////////////////////////////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////
@@ -1531,10 +1540,14 @@ static void uart_task(void *pvParameters) {
           if (strncmp((const char *)is_duplicated_data, "N", 1) == 0) {
             // if the following is 'true', it means we already have all the
             // messages needed to conform the data from the sensor-node
-            if (amount_msg_needed == received_messages) {
+            if (amount_msg_needed == received_data_messages) {
               last_data_msg_id = MSG_COUNTER_RX;
               sum_previous_block_data_size = 0;
-              xTaskNotifyGive(decode_rcv_blocked_data_task_handle);
+              received_data_messages = 0;
+
+              ///// start timer /////
+              xTimerStart(decoding_data_timer_handle, 0);
+              ///// start timer /////
             }
             //
             MSG_COUNTER_RX++;
