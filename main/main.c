@@ -5,7 +5,7 @@
 // ** Project name:               SHM CENTRAL NODE
 // ** Created by:                 Andy Duarte Taño
 // ** Created:                    25/03/2024
-// ** Last modified:              23/04/2024
+// ** Last modified:              25/04/2024
 // ** Software:                   C/C++, ESP-IDF Framework, VS Code
 // ** Hardware:                   ESP32-Ethernet-Kit_A_V1.2
 //                                Reyax RYLR998 LoRa Module
@@ -709,7 +709,11 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     ////////////////////////////////////////////////////////////////////////
     // send to message buffer **********************************************
     size_t xReceivedBytes;
-    char item[hex_block_size + 1];
+    char *item = (char *)malloc((hex_block_size + 1) * sizeof(char));
+    if (item == NULL) {
+      ESP_LOGE(TAG, "*NOT ENOUGH HEAP* Failed to allocate '*item'");
+    }
+    // char item[hex_block_size + 1];
     size_t item_max_size = hex_block_size;
 
     ESP_LOGI(TAG, "Message Buffer free space before reading the data: <%zu>\n",
@@ -728,18 +732,21 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
                                 item_max_size,
                                 /* Ticks to wait if buffer is empty. */
                                 portMAX_DELAY);
-      ESP_LOGW(TAG,
-               "***DEBUGGING*** Message Buffer -> size of the retrieved item: "
-               "<%zu> ",
-               xReceivedBytes);
-      ESP_LOGW(TAG, "***DEBUGGING*** Message Buffer -> item: <%s>", item);
-      ESP_LOGI(TAG,
-               "Message Buffer free space after reading block (%zu): <%zu>\n",
-               i, xMessageBufferSpacesAvailable(data_in_msg_buf_handle));
 
       if (xReceivedBytes > 0) {
         // ''item'' contains a message that is xReceivedBytes long. Process
         // the message here....
+        item[hex_block_size] = NULL_END;
+
+        ESP_LOGW(
+            TAG,
+            "***DEBUGGING*** Message Buffer -> size of the retrieved item: "
+            "<%zu> ",
+            xReceivedBytes);
+        ESP_LOGW(TAG, "***DEBUGGING*** Message Buffer -> item: <%s>", item);
+        ESP_LOGI(TAG,
+                 "Message Buffer free space after reading block (%zu): <%zu>\n",
+                 i, xMessageBufferSpacesAvailable(data_in_msg_buf_handle));
       }
     }
     // send to message buffer **********************************************
@@ -1064,7 +1071,7 @@ static void transmit_ack_task(void *pvParameters) {
   char *header_hex_of_data_to_send = NULL;
   //
   ///// data to send
-  char *data_to_send_hex = NULL;
+  // char *data_to_send_hex = NULL;
   //
   ///// full message to send (header + data)
   char *full_message_hex = NULL;

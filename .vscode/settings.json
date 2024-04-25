@@ -29,6 +29,7 @@
         "queue.h": "c",
         "message_buffer.h": "c",
         "semphr.h": "c",
-        "timers.h": "c"
+        "timers.h": "c",
+        "esp_log.h": "c"
     }
 }
