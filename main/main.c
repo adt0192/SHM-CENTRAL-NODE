@@ -1836,6 +1836,8 @@ void app_main(void) {
   ESP_LOGI(TAG, "Waiting 50 ms");
   vTaskDelay(pdMS_TO_TICKS(50));
 
+  ESP_ERROR_CHECK(set_timer_decoding_data());
+
   ESP_ERROR_CHECK(init_2d_arrays());
 
   ESP_LOGI(TAG, "******************************************************");
