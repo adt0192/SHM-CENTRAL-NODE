@@ -819,6 +819,8 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     free(tmp_x_sample);
     free(tmp_y_sample);
     free(tmp_z_sample);
+
+    free(item);
     // FREEING UP ALLOCATED MEMORY *********************************************
     // FREEING UP ALLOCATED MEMORY *********************************************
     // FREEING UP ALLOCATED MEMORY *********************************************
