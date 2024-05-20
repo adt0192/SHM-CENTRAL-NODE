@@ -219,7 +219,7 @@ Lora_Data_t Lora_data;
 // after software restart
 uint16_t MSG_COUNTER_RX = 0; // counter to set the message transaction ID
 
-#define CR 10
+#define CR 2
 #define N 1024     // number of samples
 #define p (N / CR) // number of compressed samples
 
@@ -1419,7 +1419,7 @@ static void check_header_incoming_data_task(void *pvParameters) {
         if (xBytesSent != strlen(Lora_data.Data)) {
           // the string could not be added to the message buffer because there
           // was not enough free space in the buffer
-          ESP_LOGE(TAG, "The data coudln't be added to the Message Buffer "
+          ESP_LOGE(TAG, "The data couldn't be added to the Message Buffer "
                         "because there was not enough space\n");
         } else {
           ESP_LOGI(TAG, "Item sent to Message Buffer");
