@@ -1589,6 +1589,7 @@ static void uart_task(void *pvParameters) {
                      "event.size "
                      "<= FULL_IN_UART_DATA_SIZE)' -> data_received_count: %u",
                      data_received_count);
+            ESP_LOGW(TAG, "full_in_uart_data: %s", full_in_uart_data);
           } else {
             ESP_LOGE(TAG, "There's no enough space in 'full_in_uart_data' to "
                           "store received data");
