@@ -155,7 +155,7 @@ const int16_t decoding_data_start_time = 6000;
 const int timerID = 1;
 
 // to keep track of the transaction ID of the last data message we receeived
-uint16_t last_data_msg_id = 0;
+uint16_t last_data_msg_id = MAX_TRANSACTION_ID;
 
 // to keep track of the received messages after the 'ctrl' message
 uint8_t received_data_messages = 0;
@@ -1375,6 +1375,12 @@ static void check_header_incoming_data_task(void *pvParameters) {
         // increment the counter of the messages we are receiving after the
         // 'ctrl' message
         received_data_messages++;
+        ESP_LOGE(TAG,
+                 "**********************************************************");
+        ESP_LOGW(TAG, "***DEBUGGING*** 'received_data_messages': <%u>",
+                 received_data_messages);
+        ESP_LOGE(TAG,
+                 "**********************************************************");
 
         ////////////////////////////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////
