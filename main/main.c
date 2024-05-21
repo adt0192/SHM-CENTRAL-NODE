@@ -189,7 +189,7 @@ char *in_ctrl_msg = NULL;
 double resolution = 0;
 
 // RingBuffer variables
-#define IN_BUFFER_SIZE 4096
+#define IN_BUFFER_SIZE 65536
 #define RINGBUFFER_TYPE RINGBUF_TYPE_BYTEBUF
 
 #define INCOMING_UART_DATA_SIZE 128
@@ -651,8 +651,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     }
 
     // *************************************************************************
-    // EXTRACT THE BLOCK OF INFO OUT FROM DATA_IN_BUFFER
-    // ***********************
+    // EXTRACT THE BLOCK OF INFO OUT FROM DATA_IN_BUFFER ***********************
     // *************************************************************************
     // iterate over 'data_in_buffer' and extract the blocks
     for (size_t i = 0; i < amount_msg_needed; i++) {
@@ -791,9 +790,9 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
     // EXTRACT THE BLOCK OF INFO OUT FROM DATA_IN_BUFFER ***********************
     // *************************************************************************
 
-    ////////////////////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////////////////////////////
-    // send to message buffer **********************************************
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    // receive from message buffer *********************************************
     size_t xReceivedBytes;
     char *item = (char *)malloc((hex_block_size + 1) * sizeof(char));
     if (item == NULL) {
@@ -835,9 +834,9 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
                  i, xMessageBufferSpacesAvailable(data_in_msg_buf_handle));
       }
     }
-    // send to message buffer **********************************************
-    ////////////////////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////////////////////////////
+    // receive from message buffer *********************************************
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////
@@ -925,13 +924,11 @@ static void decode_rcv_blocked_data_task(void *pvParameters) {
   }
 }
 ///////////////////////////////////////////////////////////////////////////////
-//******************* Decode the data received in blocks
-//********************//
+//******************* Decode the data received in blocks ********************//
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
-//*************** Extract info from the received ctrl message
-//***************//
+//*************** Extract info from the received ctrl message ***************//
 ///////////////////////////////////////////////////////////////////////////////
 static void extract_info_from_ctrl_msg_task(void *pvParameters) {
   // to temporarily store the hexadecimal charactes for xyz amount of bits
@@ -1487,7 +1484,7 @@ static void uart_task(void *pvParameters) {
   uint8_t *full_in_uart_data = (uint8_t *)malloc(FULL_IN_UART_DATA_SIZE);
 
   // to keep track of the UART sub-block of data received, 120 bytes max each
-  uint8_t data_received_count = 0;
+  uint16_t data_received_count = 0;
 
   while (1) {
     // waiting for UART event
@@ -1585,11 +1582,13 @@ static void uart_task(void *pvParameters) {
             // update the amount of data received
             data_received_count += event.size;
             ESP_LOGW(TAG,
-                     "***DEBUGGING*** Inside 'if (data_received_count + "
-                     "event.size "
-                     "<= FULL_IN_UART_DATA_SIZE)' -> data_received_count: %u",
+                     "***DEBUGGING*** Inside [if (data_received_count + "
+                     "event.size)] -> data_received_count: %u",
                      data_received_count);
-            ESP_LOGW(TAG, "full_in_uart_data: %s", full_in_uart_data);
+            /*  ESP_LOGW(TAG,
+                      "***DEBUGGING*** Inside [if (data_received_count + "
+                      "event.size)] full_in_uart_data: %s",
+                      full_in_uart_data); */
           } else {
             ESP_LOGE(TAG, "There's no enough space in 'full_in_uart_data' to "
                           "store received data");
@@ -1601,9 +1600,13 @@ static void uart_task(void *pvParameters) {
           if (event.size != 120) {
             full_in_uart_data[data_received_count] = NULL_END;
 
-            ESP_LOGW(TAG, "***DEBUGGING*** full_in_uart_data: %s",
+            ESP_LOGW(TAG,
+                     "***DEBUGGING*** [if (event.size != 120)] "
+                     "full_in_uart_data: %s",
                      full_in_uart_data);
-            ESP_LOGW(TAG, "***DEBUGGING*** data_received_count: %u",
+            ESP_LOGW(TAG,
+                     "***DEBUGGING*** [if (event.size != 120)] "
+                     "data_received_count: %u",
                      data_received_count);
 
             // +RCV=22,length,data,RSSI,SNR
