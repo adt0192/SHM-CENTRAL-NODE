@@ -935,3 +935,13 @@
 6134	6363	7391892190553477	D:/WORK/PROJECT/ESP-IDF_PROJECTS/SHM-CENTRAL-NODE/build/.bin_timestamp	a1e9b84dd46ca4e9
 6364	6436	0	esp-idf/esptool_py/CMakeFiles/app_check_size	1d2ef7fc2b808f7d
 6364	6436	0	D:/WORK/PROJECT/ESP-IDF_PROJECTS/SHM-CENTRAL-NODE/build/esp-idf/esptool_py/CMakeFiles/app_check_size	1d2ef7fc2b808f7d
+43	114	0	esp-idf/esptool_py/CMakeFiles/app_check_size	1d2ef7fc2b808f7d
+43	114	0	D:/WORK/PROJECT/ESP-IDF_PROJECTS/SHM-CENTRAL-NODE/build/esp-idf/esptool_py/CMakeFiles/app_check_size	1d2ef7fc2b808f7d
+38	158	7391891429956904	bootloader-prefix/src/bootloader-stamp/bootloader-build	ed2478f4daa6a9c9
+38	158	7391891429956904	bootloader/bootloader.elf	ed2478f4daa6a9c9
+38	158	7391891429956904	bootloader/bootloader.bin	ed2478f4daa6a9c9
+38	158	7391891429956904	bootloader/bootloader.map	ed2478f4daa6a9c9
+38	158	7391891429956904	D:/WORK/PROJECT/ESP-IDF_PROJECTS/SHM-CENTRAL-NODE/build/bootloader-prefix/src/bootloader-stamp/bootloader-build	ed2478f4daa6a9c9
+38	158	7391891429956904	D:/WORK/PROJECT/ESP-IDF_PROJECTS/SHM-CENTRAL-NODE/build/bootloader/bootloader.elf	ed2478f4daa6a9c9
+38	158	7391891429956904	D:/WORK/PROJECT/ESP-IDF_PROJECTS/SHM-CENTRAL-NODE/build/bootloader/bootloader.bin	ed2478f4daa6a9c9
+38	158	7391891429956904	D:/WORK/PROJECT/ESP-IDF_PROJECTS/SHM-CENTRAL-NODE/build/bootloader/bootloader.map	ed2478f4daa6a9c9
