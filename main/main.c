@@ -289,12 +289,14 @@ void vTimerCallbackDecodeData(TimerHandle_t pxTimer)
     // and stop the timer once the timer has expired 5 times.
 
     ESP_LOGW(TAG, "DECODING DATA TIMER timed-out");
+    xTimerStop(decoding_data_timer_handle, 0);
+    xTaskNotifyGive(decode_rcv_blocked_data_task_handle);
 
-    if (strncmp((const char *)is_duplicated_data, "N", 1) == 0)
-    {
-        xTimerStop(decoding_data_timer_handle, 0);
-        xTaskNotifyGive(decode_rcv_blocked_data_task_handle);
-    }
+    /*  if (strncmp((const char *)is_duplicated_data, "N", 1) == 0)
+     {
+         xTimerStop(decoding_data_timer_handle, 0);
+         xTaskNotifyGive(decode_rcv_blocked_data_task_handle);
+     } */
 }
 ///////////////////////////////////////////////////////////////////////////////
 //******************* Callback function when timer expires ******************//
@@ -1430,14 +1432,6 @@ static void check_header_incoming_data_task(void *pvParameters)
             // we are sending ACK message thru lora
             is_sending_ack = "Y";
 
-            // if the following is 'true' it means we received a duplicate of the last
-            // data message because the sensor node didn't receive the 'ack' of that
-            // last data message, so we reset the 'DECODING DATA TIMER'
-            if (in_transaction_ID_dec == last_data_msg_id)
-            {
-                xTimerReset(decoding_data_timer_handle, 0);
-            }
-
             // only if 'in_transaction_ID_dec ==
             // MSG_COUNTER_RX' it's true, it means we didn't receive a dplicated
             // message, so it's safe to send to data_in_buffer
@@ -1448,8 +1442,8 @@ static void check_header_incoming_data_task(void *pvParameters)
                 received_data_messages++;
                 ESP_LOGE(TAG,
                          "**********************************************************");
-                ESP_LOGW(TAG, "***DEBUGGING*** 'received_data_messages': <%u>",
-                         received_data_messages);
+                ESP_LOGW(TAG, "***DEBUGGING*** 'received_data_messages': <%u/%u>",
+                         received_data_messages, amount_msg_needed);
                 ESP_LOGE(TAG,
                          "**********************************************************");
 
@@ -1531,6 +1525,14 @@ static void check_header_incoming_data_task(void *pvParameters)
             // to the other side so he knows we already received that previous
             // message
             is_duplicated_data = in_transaction_ID_dec == MSG_COUNTER_RX ? "N" : "Y";
+
+            // if the following is 'true' it means we received a duplicate of the last
+            // data message because the sensor node didn't receive the 'ack' of that
+            // last data message, so we reset the 'DECODING DATA TIMER'
+            if (in_transaction_ID_dec == last_data_msg_id)
+            {
+                xTimerStart(decoding_data_timer_handle, 0);
+            }
 
             ESP_LOGW(TAG, "Waiting 500ms to transmit 'ack' message\n");
             vTaskDelay(pdMS_TO_TICKS(DELAY));
@@ -1656,6 +1658,9 @@ static void uart_task(void *pvParameters)
                      (start_uart_block)) &&
                     (strncmp((const char *)is_rylr998_module_init, "Y", 1) == 0))
                 {
+                    // we stop the timer to analyze the message we received
+                    xTimerStop(decoding_data_timer_handle, 0);
+
                     // we mark the start of the block
                     start_uart_block = true;
 
