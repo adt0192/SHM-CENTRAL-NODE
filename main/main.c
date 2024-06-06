@@ -1614,12 +1614,12 @@ static void uart_task(void *pvParameters)
                                 pdMS_TO_TICKS(500));
                 ESP_LOGI(TAG, "Data received from LoRa module: incoming_uart_data = %s", incoming_uart_data);
                 ESP_LOGI(TAG, "Length of data received: event.size = %zu", event.size);
+                ESP_LOGI(TAG, "is_sending_ack = %s", is_sending_ack);
 
                 ////////////////////////////////////////////////////////////////////////
                 ////////////////////////////////////////////////////////////////////////
                 // if the module answers +OK and we are sending data *******************
-                if (((strncmp((const char *)incoming_uart_data, "+OK", 3) == 0) || (strncmp((const char *)incoming_uart_data, "OK", 2) == 0)) &&
-                    (strncmp((const char *)is_sending_ack, "Y", 1) == 0))
+                if ((strncmp((const char *)incoming_uart_data, "+OK", 3) == 0) || (strncmp((const char *)incoming_uart_data, "OK", 2)) && (strncmp((const char *)is_sending_ack, "Y", 1) == 0))
                 {
                     ESP_LOGW(TAG, "***DEBUGGING*** Entering (if +OK OR OK)");
 
