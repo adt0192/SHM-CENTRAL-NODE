@@ -61,34 +61,113 @@ void init_rylr998_module(void)
 
     char *data_config = "";
 
+    // RYLR993LITE *************************************************************
+    // OPERATION MODE
+    ESP_LOGI(TAG, "Sending <OPMODE=> Command to LoRa Module...\n");
+    char *opmode_command = "AT+OPMODE=1\r\n";
+    uart_write_bytes(UART_NUM, (const char *)opmode_command, strlen(opmode_command));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
+    data_config = "AT+OPMODE=?\r\n";
+    uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
+    // 0
+    ESP_LOGI(TAG, "Sending <AT> Command to LoRa Module...\n");
+    char *at_command = "AT\r\n";
+    uart_write_bytes(UART_NUM, (const char *)at_command, strlen(at_command));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
+    // 0
+    ESP_LOGI(TAG, "Sending Reset Command to LoRa Module...\n");
+    char *reset_command = "ATZ\r\n";
+    uart_write_bytes(UART_NUM, (const char *)reset_command,
+                     strlen(reset_command));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
+    // 1
+    ESP_LOGI(TAG, "Sending Address Config Command to LoRa Module...\n");
+    char *param_add = "AT+ADDRESS=" LORA_ADDRESS "\r\n";
+    uart_write_bytes(UART_NUM, (const char *)param_add, strlen(param_add));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
+    data_config = "AT+ADDRESS=?\r\n";
+    uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
+    // 2
+    ESP_LOGI(TAG, "Sending Band Config Command to LoRa Module...\n");
+    char *param_band = "AT+BAND=" LORA_BAND "\r\n";
+    uart_write_bytes(UART_NUM, (const char *)param_band, strlen(param_band));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
+    data_config = "AT+BAND=?\r\n";
+    uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
+    // 3
+    char param_set[30];
+    snprintf(param_set, 25, "AT+PARAMETER=%d,%d,%d,%d\r\n", LORA_SPREADING_FACTOR,
+             LORA_BANDWIDTH, LORA_CODING_RATE, LORA_PREAMBLE);
+    ESP_LOGI(TAG, "Sending <%s> Config Command to LoRa Module...\n", param_set);
+    uart_write_bytes(UART_NUM, (const char *)param_set, strlen(param_set));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
+    data_config = "AT+PARAMETER=?\r\n";
+    uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
+    // 4
+    ESP_LOGI(TAG, "Sending Domain Password Config Command to LoRa Module...\n");
+    char *param_pass = "AT+CPIN=" LORA_DOMAIN_PASS "\r\n";
+    uart_write_bytes(UART_NUM, (const char *)param_pass, strlen(param_pass));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
+    data_config = "AT+CPIN=?\r\n";
+    uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
+    // 5
+    data_config = "AT+CRFOP=?\r\n";
+    uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+    // RYLR993LITE *************************************************************
+
+    // RYLR998 *****************************************************************
+    /* // 0
     ESP_LOGI(TAG, "Sending <AT> Command to LoRa Module...\n");
     char *test_command = "AT\r\n";
     uart_write_bytes(UART_NUM, (const char *)test_command, strlen(test_command));
     vTaskDelay(pdMS_TO_TICKS(DELAY));
 
+    // 0
     ESP_LOGI(TAG, "Sending Reset Command to LoRa Module...\n");
     char *reset_command = "AT+RESET\r\n";
     uart_write_bytes(UART_NUM, (const char *)reset_command,
                      strlen(reset_command));
     vTaskDelay(pdMS_TO_TICKS(DELAY));
 
-    /* ESP_LOGI(TAG, "Sending Mode Command to LoRa Module...\n");
-    char *mode_command = "AT+MODE=" LORA_MODE "\r\n";
-    uart_write_bytes(UART_NUM, (const char *)mode_command,
-    strlen(mode_command));
+    // 1
+    ESP_LOGI(TAG, "Sending Address Config Command to LoRa Module...\n");
+    char *param_add = "AT+ADDRESS=" LORA_ADDRESS "\r\n";
+    uart_write_bytes(UART_NUM, (const char *)param_add, strlen(param_add));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
 
-    data_config = "AT+MODE?\r\n";
+    data_config = "AT+ADDRESS?\r\n";
     uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
-    vTaskDelay(pdMS_TO_TICKS(DELAY)); */
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
 
-    /* ESP_LOGI(TAG, "Sending IPR Baud Rate Command to LoRa Module...\n");
-    char *ipr_command = "AT+IPR=" LORA_BAUD_RATE "\r\n";
-    uart_write_bytes(UART_NUM, (const char *)ipr_command, strlen(ipr_command));
+    // 2
+    ESP_LOGI(TAG, "Sending Network ID Config Command to LoRa Module...\n");
+    char *param_net_id = "AT+NETWORKID=" LORA_NETWORK_ID "\r\n";
+    uart_write_bytes(UART_NUM, (const char *)param_net_id, strlen(param_net_id));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
 
-    data_config = "AT+IPR?\r\n";
+    data_config = "AT+NETWORKID?\r\n";
     uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
-    vTaskDelay(pdMS_TO_TICKS(DELAY)); */
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
 
+    // 3
     ESP_LOGI(TAG, "Sending Band Config Command to LoRa Module...\n");
     char *param_band = "AT+BAND=" LORA_BAND "\r\n";
     uart_write_bytes(UART_NUM, (const char *)param_band, strlen(param_band));
@@ -98,6 +177,7 @@ void init_rylr998_module(void)
     uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
     vTaskDelay(pdMS_TO_TICKS(DELAY));
 
+    // 4
     char param_set[30];
     snprintf(param_set, 25, "AT+PARAMETER=%d,%d,%d,%d\r\n", LORA_SPREADING_FACTOR,
              LORA_BANDWIDTH, LORA_CODING_RATE, LORA_PREAMBLE);
@@ -108,26 +188,20 @@ void init_rylr998_module(void)
 
     data_config = "AT+PARAMETER?\r\n";
     uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
-    vTaskDelay(pdMS_TO_TICKS(DELAY));
+    vTaskDelay(pdMS_TO_TICKS(DELAY)); */
 
-    ESP_LOGI(TAG, "Sending Address Config Command to LoRa Module...\n");
-    char *param_add = "AT+ADDRESS=" LORA_ADDRESS "\r\n";
-    uart_write_bytes(UART_NUM, (const char *)param_add, strlen(param_add));
-    vTaskDelay(pdMS_TO_TICKS(DELAY));
+    //
+    // NOT USED
+    /* ESP_LOGI(TAG, "Sending IPR Baud Rate Command to LoRa Module...\n");
+    char *ipr_command = "AT+IPR=" LORA_BAUD_RATE "\r\n";
+    uart_write_bytes(UART_NUM, (const char *)ipr_command, strlen(ipr_command));
 
-    data_config = "AT+ADDRESS?\r\n";
+    data_config = "AT+IPR?\r\n";
     uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
-    vTaskDelay(pdMS_TO_TICKS(DELAY));
+    vTaskDelay(pdMS_TO_TICKS(DELAY)); */
+    //
 
-    ESP_LOGI(TAG, "Sending Network ID Config Command to LoRa Module...\n");
-    char *param_net_id = "AT+NETWORKID=" LORA_NETWORK_ID "\r\n";
-    uart_write_bytes(UART_NUM, (const char *)param_net_id, strlen(param_net_id));
-    vTaskDelay(pdMS_TO_TICKS(DELAY));
-
-    data_config = "AT+NETWORKID?\r\n";
-    uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
-    vTaskDelay(pdMS_TO_TICKS(DELAY));
-
+    /* // 5
     ESP_LOGI(TAG, "Sending Domain Password Config Command to LoRa Module...\n");
     char *param_pass = "AT+CPIN=" LORA_DOMAIN_PASS "\r\n";
     uart_write_bytes(UART_NUM, (const char *)param_pass, strlen(param_pass));
@@ -135,17 +209,33 @@ void init_rylr998_module(void)
 
     data_config = "AT+CPIN?\r\n";
     uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
-    vTaskDelay(pdMS_TO_TICKS(DELAY));
+    vTaskDelay(pdMS_TO_TICKS(DELAY)); */
 
+    //
+    // 6 NOT USED
     /* ESP_LOGI(TAG, "Sending RF Output Power Command to LoRa Module...\n");
     char *rf_output_power = "AT+CRFOP=" LORA_RF_OUTPUT_POWER "\r\n";
     uart_write_bytes(UART_NUM, (const char *)rf_output_power,
-                     strlen(rf_output_power));
+                 strlen(rf_output_power));
+    vTaskDelay(pdMS_TO_TICKS(DELAY)); */
+    //
+
+    /* data_config = "AT+CRFOP?\r\n";
+    uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
     vTaskDelay(pdMS_TO_TICKS(DELAY)); */
 
-    data_config = "AT+CRFOP?\r\n";
+    //
+    // 7 NOT USED
+    /* ESP_LOGI(TAG, "Sending Mode Command to LoRa Module...\n");
+    char *mode_command = "AT+MODE=" LORA_MODE_TX_RX "\r\n";
+    uart_write_bytes(UART_NUM, (const char *)mode_command,
+    strlen(mode_command));
+
+    data_config = "AT+MODE?\r\n";
     uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
-    vTaskDelay(pdMS_TO_TICKS(DELAY));
+    vTaskDelay(pdMS_TO_TICKS(DELAY)); */
+    //
+    // RYLR998 *****************************************************************
 
     ESP_LOGI(TAG, "RYLR998 Module Initialized !!!COMPLETED!!!\n");
     is_rylr998_module_init = "Y";
