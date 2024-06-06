@@ -1396,6 +1396,8 @@ static void check_header_incoming_data_task(void *pvParameters)
         in_transaction_ID_dec = in_message_header_dec & 0x3FFF;
         ESP_LOGW(TAG, "***DEBUGGING*** Transaction ID of incoming message: <%u>",
                  in_transaction_ID_dec);
+        ESP_LOGW(TAG, "***DEBUGGING*** MSG_COUNTER_RX: <%u>",
+                 MSG_COUNTER_RX);
 
         // if the incoming message is 'ctrl' type, we extract the info in it:
         // this is *xyz*_bits and min_*xyz*_value
@@ -1427,6 +1429,8 @@ static void check_header_incoming_data_task(void *pvParameters)
         if ((in_transaction_ID_dec == MSG_COUNTER_RX) ||
             (in_transaction_ID_dec == MSG_COUNTER_RX - 1))
         {
+            ESP_LOGE(TAG, "***DEBUGGING*** Entering (if ((in_transaction_ID_dec == MSG_COUNTER_RX) || (in_transaction_ID_dec == MSG_COUNTER_RX - 1)))");
+
             // so it means we received the message we were expecting
             // we set is_sending_ack flag to "Y" to know that
             // we are sending ACK message thru lora
@@ -1608,7 +1612,7 @@ static void uart_task(void *pvParameters)
             case UART_DATA:
                 uart_read_bytes(UART_NUM, incoming_uart_data, event.size,
                                 pdMS_TO_TICKS(500));
-                ESP_LOGI(TAG, "Data received from LoRa module: %s", incoming_uart_data);
+                ESP_LOGI(TAG, "Data received from LoRa module: incoming_uart_data = %s", incoming_uart_data);
                 ESP_LOGI(TAG, "Length of data received: event.size = %zu", event.size);
 
                 ////////////////////////////////////////////////////////////////////////
@@ -1617,6 +1621,8 @@ static void uart_task(void *pvParameters)
                 if (((strncmp((const char *)incoming_uart_data, "+OK", 3) == 0) || (strncmp((const char *)incoming_uart_data, "OK", 2) == 0)) &&
                     (strncmp((const char *)is_sending_ack, "Y", 1) == 0))
                 {
+                    ESP_LOGW(TAG, "***DEBUGGING*** Entering (if +OK OR OK)");
+
                     // so we already sent ack, we put the flag back to "N"
                     is_sending_ack = "N";
 
@@ -1626,6 +1632,8 @@ static void uart_task(void *pvParameters)
                     // duplicated message
                     if (strncmp((const char *)is_duplicated_data, "N", 1) == 0)
                     {
+                        ESP_LOGW(TAG, "***DEBUGGING*** Entering (if is_duplicated_data == N)");
+
                         // if the following is 'true', it means we already have all the
                         // messages needed to conform the data from the sensor-node
                         if (amount_msg_needed == received_data_messages)
