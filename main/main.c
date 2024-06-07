@@ -1616,10 +1616,21 @@ static void uart_task(void *pvParameters)
                 ESP_LOGI(TAG, "Length of data received: event.size = %zu", event.size);
                 ESP_LOGI(TAG, "is_sending_ack = %s", is_sending_ack);
 
+                // DEBUG ***************************************************************
+                if (strncmp((const char *)incoming_uart_data, "\r\nOK\r\n", 2) == 0)
+                {
+                    ESP_LOGW(TAG, "***DEBUGGING*** incoming_uart_data is 'OK'");
+                }
+                if (strncmp((const char *)incoming_uart_data, "+OK", 3) == 0)
+                {
+                    ESP_LOGW(TAG, "***DEBUGGING*** incoming_uart_data is '+OK'");
+                }
+                // DEBUG ***************************************************************
+
                 ////////////////////////////////////////////////////////////////////////
                 ////////////////////////////////////////////////////////////////////////
                 // if the module answers +OK and we are sending data *******************
-                if ((strncmp((const char *)incoming_uart_data, "+OK", 3) == 0) || (strncmp((const char *)incoming_uart_data, "OK", 2)) && (strncmp((const char *)is_sending_ack, "Y", 1) == 0))
+                if (((strncmp((const char *)incoming_uart_data, "+OK", 3) == 0) || (strncmp((const char *)incoming_uart_data, "OK", 2) == 0)) && (strncmp((const char *)is_sending_ack, "Y", 1) == 0))
                 {
                     ESP_LOGW(TAG, "***DEBUGGING*** Entering (if +OK OR OK)");
 

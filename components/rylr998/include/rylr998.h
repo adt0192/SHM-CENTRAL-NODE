@@ -37,7 +37,7 @@ extern char *is_rylr998_module_init; // to know if we already configured the
 #define LORA_RX_ADDRESS 2     // Address of receiver module
 #define LORA_MODE_TX_RX "0"   // 0：Transceiver mode
 #define LORA_MODE_SLEEP "1"   // 1：Sleep mode.
-#define LORA_BAUD_RATE "115200"
+#define LORA_BAUD_RATE "9600"
 #define LORA_SPREADING_FACTOR 8 // 5 to 11
 #define LORA_BANDWIDTH 7        // 7: 125 KHz 8: 250 KHz 9: 500 KHz
 #define LORA_CODING_RATE 1      // 1 to 4
