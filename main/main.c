@@ -279,6 +279,41 @@ static const char *TAG = "SHM CENTRAL NODE";
 //+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+//
 //+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+//
 
+// Function to trim <CR> and <LF> from the beginning and end of the string
+esp_err_t trim_CR_LF(uint8_t *str)
+{
+    int length = strlen((char *)str);
+
+    // Remove <LF> from the end
+    if (length > 0 && str[length - 1] == '\n')
+    {
+        str[length - 1] = '\0';
+        length--;
+    }
+
+    // Remove <CR> from the end
+    if (length > 0 && str[length - 1] == '\r')
+    {
+        str[length - 1] = '\0';
+        length--;
+    }
+
+    // Remove <CR> and <LF> from the beginning
+    if (length > 0 && str[0] == '\r')
+    {
+        memmove(str, str + 1, length);
+        length--;
+    }
+
+    if (length > 0 && str[0] == '\n')
+    {
+        memmove(str, str + 1, length);
+        length--;
+    }
+
+    return ESP_OK;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //******************* Callback function when timer expires ******************//
 ///////////////////////////////////////////////////////////////////////////////
@@ -1616,16 +1651,16 @@ static void uart_task(void *pvParameters)
                 ESP_LOGI(TAG, "Length of data received: event.size = %zu", event.size);
                 ESP_LOGI(TAG, "is_sending_ack = %s", is_sending_ack);
 
-                // DEBUG ***************************************************************
-                if (strncmp((const char *)incoming_uart_data, "\r\nOK\r\n", 2) == 0)
+                // trying trimming 'CRLF' RYLR993LITE ***********************************
+                // Trim the <CR><LF>
+                trim_CR_LF(incoming_uart_data);
+
+                // Compare the trimmed string with "OK"
+                if (strcmp((char *)incoming_uart_data, "OK") == 0)
                 {
                     ESP_LOGW(TAG, "***DEBUGGING*** incoming_uart_data is 'OK'");
                 }
-                if (strncmp((const char *)incoming_uart_data, "+OK", 3) == 0)
-                {
-                    ESP_LOGW(TAG, "***DEBUGGING*** incoming_uart_data is '+OK'");
-                }
-                // DEBUG ***************************************************************
+                // trying trimming 'CRLF' RYLR993LITE ***********************************
 
                 ////////////////////////////////////////////////////////////////////////
                 ////////////////////////////////////////////////////////////////////////
