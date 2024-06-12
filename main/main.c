@@ -1667,7 +1667,7 @@ static void uart_task(void *pvParameters)
                 // if the module answers +OK and we are sending data *******************
                 if (((strncmp((const char *)incoming_uart_data, "+OK", 3) == 0) || (strncmp((const char *)incoming_uart_data, "OK", 2) == 0)) && (strncmp((const char *)is_sending_ack, "Y", 1) == 0))
                 {
-                    ESP_LOGW(TAG, "***DEBUGGING*** Entering (if +OK OR OK)");
+                    // ESP_LOGW(TAG, "***DEBUGGING*** Entering (if +OK OR OK)");
 
                     // so we already sent ack, we put the flag back to "N"
                     is_sending_ack = "N";
