@@ -740,10 +740,10 @@ static void decode_rcv_blocked_data_task(void *pvParameters)
             // add the ending null character to ensure a valid string
             tmp_data_in_buffer_block_hex[hex_block_size] = NULL_END;
 
-            ESP_LOGW(
+            /* ESP_LOGW(
                 TAG,
                 "***DEBUGGING*** extracted from 'data_in_buffer HEX (%zu)': <%s>", i,
-                tmp_data_in_buffer_block_hex);
+                tmp_data_in_buffer_block_hex); */
 
             // ***********************************************************************
             // DECODIFICATION PROCESS ************************************************
@@ -798,10 +798,10 @@ static void decode_rcv_blocked_data_task(void *pvParameters)
             tmp_data_in_buffer_block_bin[total_bits_after_pad0] =
                 NULL_END; // ensure null-termination
 
-            ESP_LOGW(
+            /* ESP_LOGW(
                 TAG,
                 "***DEBUGGING*** extracted from 'data_in_buffer BIN (%zu)': <%s>", i,
-                tmp_data_in_buffer_block_bin);
+                tmp_data_in_buffer_block_bin); */
 
             // after the previous 'for' loop ended, 'tmp_data_in_buffer_block_bin'
             // will contain, after each iteration, the block of data from the sensor
@@ -830,24 +830,24 @@ static void decode_rcv_blocked_data_task(void *pvParameters)
                 strncpy(tmp_x_sample, tmp_data_in_buffer_block_bin + k, x_bits);
                 tmp_x_sample[x_bits] = NULL_END; // ensure null ending
                 strcpy(x_samples_compressed_bin[d_a], tmp_x_sample);
-                ESP_LOGW(TAG, "***DEBUGGING*** tmp_x_sample(%d) -> <%s>", d_a,
-                         tmp_x_sample);
+                /* ESP_LOGW(TAG, "***DEBUGGING*** tmp_x_sample(%d) -> <%s>", d_a,
+                         tmp_x_sample); */
                 //
                 // y data
                 strncpy(tmp_y_sample, tmp_data_in_buffer_block_bin + (k + x_bits),
                         y_bits);
                 tmp_y_sample[y_bits] = NULL_END; // ensure null ending
                 strcpy(y_samples_compressed_bin[d_a], tmp_y_sample);
-                ESP_LOGW(TAG, "***DEBUGGING*** tmp_y_sample(%d) -> <%s>", d_a,
-                         tmp_y_sample);
+                /* ESP_LOGW(TAG, "***DEBUGGING*** tmp_y_sample(%d) -> <%s>", d_a,
+                         tmp_y_sample); */
                 //
                 // z data
                 strncpy(tmp_z_sample,
                         tmp_data_in_buffer_block_bin + (k + x_bits + y_bits), z_bits);
                 tmp_z_sample[z_bits] = NULL_END; // ensure null ending
                 strcpy(z_samples_compressed_bin[d_a], tmp_z_sample);
-                ESP_LOGW(TAG, "***DEBUGGING*** tmp_z_sample(%d) -> <%s>", d_a,
-                         tmp_z_sample);
+                /*  ESP_LOGW(TAG, "***DEBUGGING*** tmp_z_sample(%d) -> <%s>", d_a,
+                          tmp_z_sample); */
                 //
                 d_a++;
                 if (d_a == p)
@@ -903,7 +903,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters)
                 // the message here....
                 item[hex_block_size] = NULL_END;
 
-                ESP_LOGW(
+                /* ESP_LOGW(
                     TAG,
                     "***DEBUGGING*** Message Buffer -> size of the retrieved item: "
                     "<%zu> ",
@@ -911,7 +911,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters)
                 ESP_LOGW(TAG, "***DEBUGGING*** Message Buffer -> item: <%s>", item);
                 ESP_LOGW(TAG,
                          "Message Buffer free space after reading block (%zu): <%zu>\n",
-                         i, xMessageBufferSpacesAvailable(data_in_msg_buf_handle));
+                         i, xMessageBufferSpacesAvailable(data_in_msg_buf_handle)); */
             }
         }
         // receive from message buffer *********************************************
