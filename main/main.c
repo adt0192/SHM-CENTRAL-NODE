@@ -621,6 +621,7 @@ static void decode_rcv_blocked_data_task(void *pvParameters)
         // the above format is always multiple of 8,
         // so it MAY BE paddded with '0'
         // so we make:
+        //
         uint16_t total_bits_after_pad0 =
             (((xyz_bits * max_xyx_triplets_to_send) / 8) + 1) * 8;
         //
