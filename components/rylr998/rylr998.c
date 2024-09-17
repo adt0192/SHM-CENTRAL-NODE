@@ -128,6 +128,12 @@ void init_rylr998_module(void)
     vTaskDelay(pdMS_TO_TICKS(DELAY));
 
     // 5
+    ESP_LOGI(TAG, "Sending RF Output Power Config Command to LoRa Module...");
+    char *rf_output_power = "AT+CRFOP=" LORA_RF_OUTPUT_POWER "\r\n";
+    uart_write_bytes(UART_NUM, (const char *)rf_output_power,
+                     strlen(rf_output_power));
+    vTaskDelay(pdMS_TO_TICKS(DELAY));
+
     data_config = "AT+CRFOP=?\r\n";
     uart_write_bytes(UART_NUM, (const char *)data_config, strlen(data_config));
     vTaskDelay(pdMS_TO_TICKS(DELAY));

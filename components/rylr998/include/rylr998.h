@@ -47,7 +47,7 @@ extern char *is_rylr998_module_init; // to know if we already configured the
 // #define LORA_PARAMETERES "7,7,1,12" // AT+PARAMETER=<Spreading Factor>,
 // <Bandwidth>,<Coding Rate>, <Programmed Preamble>
 #define LORA_DOMAIN_PASS "44794C61"
-#define LORA_RF_OUTPUT_POWER "22"
+#define LORA_RF_OUTPUT_POWER "14"
 //***************************************************************************//
 //************************ RYLR998 CONFIG PARAMETERS ************************//
 //***************************************************************************//
